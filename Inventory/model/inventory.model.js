@@ -20,4 +20,4 @@ UsageHistory = new mongoose.Schema({
 
 const TopUp = new mongoose.model("TopUp", TopUpSchema);
 const UsageHistory = new mongoose.model("UsageHistory", UsageHistorySchema);
-model.exports = { TopUp, UsageHistory };
+export { TopUp, UsageHistory };

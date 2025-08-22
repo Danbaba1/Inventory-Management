@@ -1,14 +1,29 @@
 import mongoose from "mongoose";
-import UserType from "./user.type";
 
-const UserSchema = new mongoose.Schema({
-  Name: String,
-  IsActive: Boolean,
-  Phone: String,
-  Password: String,
-  Email: String,
-  UserType: UserType,
-});
+const UserSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    isActive: { type: Boolean, default: true },
+    phone: { type: String },
+    password: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    resetToken: { type: String, default: null },
+    resetTokenExpiry: { type: Date, default: null },
+    role: { type: String, enum: ["user", "admin"], default: "user" },
+  },
+  { timestamps: true }
+);
+
+UserSchema.index({ email: 1 });
+UserSchema.index({ resetToken: 1 });
+
+UserSchema.methods.isAdmin = function () {
+  return this.role === "admin";
+};
+
+UserSchema.statics.findActive = function () {
+  return this.find({ isActive: true });
+};
 
 const User = new mongoose.model("User", UserSchema);
-model.exports = User;
+export default User;
