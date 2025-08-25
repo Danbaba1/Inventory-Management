@@ -30,29 +30,29 @@ class ProductService {
         throw new Error("Product with name already exists");
       }
 
-      const Product = new Product({
+      const product = new Product({
         name: name.trim(),
-        category: category,
+        category: categoryId,
         quantity: Number(quantity),
         price: Number(price),
         description: description?.trim(),
       });
 
-      await Product.save();
+      await product.save();
 
       await product.populate("category", "name description");
 
       return {
         mesage: "Product created successfully",
-        Product: {
-          id: Product._id,
-          name: Product.name,
-          category: Product.category,
-          quantity: Product.quantity,
-          price: Product.price,
-          description: Product.description,
-          isAvailable: Product.isAvailable,
-          createdAt: Product.createdAt,
+        product: {
+          id: product._id,
+          name: product.name,
+          category: product.category,
+          quantity: product.quantity,
+          price: product.price,
+          description: product.description,
+          isAvailable: product.isAvailable,
+          createdAt: product.createdAt,
         },
       };
     } catch (err) {
@@ -60,14 +60,29 @@ class ProductService {
     }
   }
 
-  static async getProducts() {
+  static async getProducts(page = 1, limit = 10) {
     try {
+      const skip = (page - 1) * limit;
       const products = await Product.find({ isAvailable: true })
         .populate("category", "name description")
+        .skip(skip)
+        .limit(limit)
         .sort({
           createdAt: -1,
         });
-      return products;
+
+      const total = await Product.countDocuments({ isAvailable: true });
+
+      return {
+        products,
+        pagination: {
+          currentPage: page,
+          totalPage: Math.ceil(total / limit),
+          totalProducts: total,
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1,
+        },
+      };
     } catch (err) {
       throw new Error(err.message);
     }
@@ -78,7 +93,7 @@ class ProductService {
       if (!id) {
         throw new Error("Product ID is required");
       }
-      const product = await Product.findById({ id });
+      const product = await Product.findById(id);
 
       if (!product) {
         throw new Error("Product does not exist");
@@ -86,8 +101,14 @@ class ProductService {
 
       const { name, description, price, quantity, categoryId } = updateData;
 
-      if (name === product.name) {
-        throw new Error("Product with name already exists");
+      if (name && name === product.name) {
+        const existingProduct = await Product.findOne({
+          name,
+          _id: { $ne: id },
+        });
+        if (existingProduct) {
+          throw new Error("Product with name already exists");
+        }
       }
 
       if (categoryId) {
@@ -95,6 +116,7 @@ class ProductService {
         if (!category) {
           throw new Error("Category does not exist");
         }
+        product.category = categoryId;
       }
 
       if (name) product.name = name.trim();
@@ -105,8 +127,8 @@ class ProductService {
       const updatedProduct = await Product.save();
       await updatedProduct.populate("category", "name description");
       return {
-        message: " Product updated successfully",
-        Product: updatedProduct,
+        message: "Product updated successfully",
+        product: updatedProduct,
       };
     } catch (err) {
       throw new Error(err.message);
@@ -118,13 +140,13 @@ class ProductService {
       if (!id) {
         throw new Error("Product ID is required");
       }
-      const Product = await Product.findById({ id });
+      const product = await Product.findById(id);
 
-      if (!Product) {
+      if (!product) {
         throw new Error("Product does not exist");
       }
 
-      await Product.findByIdAndDelete({ id });
+      await Product.findByIdAndDelete(id);
       return "Product deleted successfully";
     } catch (err) {
       throw new Error(err.message);

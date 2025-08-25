@@ -6,16 +6,29 @@ const authenticateUser = async (req, res, next) => {
     const authHeader = req.header("Authorization");
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json("Access Denied: No valid token provided");
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Access Denied: No valid token provided",
+      });
     }
 
     const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWTSECRET);
 
+    if (!token) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Access denied: No token provided",
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWTSECRET);
     const user = await User.findById(decoded.userId).select("-password");
 
     if (!user) {
-      return res.status(401).json("User not found");
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "User not found",
+      });
     }
 
     req.user = {
@@ -24,19 +37,55 @@ const authenticateUser = async (req, res, next) => {
       role: user.role,
       name: user.name,
     };
+
     next();
   } catch (err) {
-    res.status(400).json("Invalid Token");
+    if (err.name === "JsonWebTokenError") {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Invalid token",
+      });
+    }
+
+    if (err.name === "TokenExpiryError") {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Token expired",
+      });
+    }
+
+    console.error("Authentication error:", err);
+    res.status(500).json({
+      error: "Internal Server Error",
+      message: "Authentication failed",
+    });
   }
 };
 
-const authorizeAdmin = (req, res, next) => {
+const authorizeAdmin = async (req, res, next) => {
+  await new Promise((resolve, reject) => {
+    authenticateUser(req, res, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  }).catch(() => {
+    return;
+  });
+
   if (!req.user) {
-    return res.status(401).json("Authentication required");
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Authentication required",
+    });
   }
-  if (req.user !== "admin") {
-    return res.status(403).json("Access Denied: Admins only");
+
+  if (req.user.role !== "admin") {
+    return res.status(403).json({
+      error: "Forbidden",
+      message: "Access Denied: Admins only",
+    });
   }
+
   next();
 };
 

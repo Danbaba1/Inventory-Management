@@ -6,8 +6,15 @@ import nodemailer from "nodemailer";
 class UserService {
   static async createAdmin(name, password) {
     try {
-      const existingAdmin = await User.findOne({ name });
+      if (!name || !password) {
+        throw new Error("Please provide both name and password");
+      }
 
+      if (password.length < 8) {
+        throw new Error("Password must be at least 8 characters long");
+      }
+
+      const existingAdmin = await User.findOne({ name });
       if (existingAdmin) {
         throw new Error("Admin already exists");
       }
@@ -22,7 +29,14 @@ class UserService {
       });
 
       await newAdmin.save();
-      return "Admin created successfully";
+      return {
+        message: "Admin created successfully",
+        admin: {
+          id: newAdmin._id,
+          name: newAdmin.name,
+          role: newAdmin.role,
+        },
+      };
     } catch (err) {
       throw new Error(err.message);
     }
@@ -93,10 +107,22 @@ class UserService {
 
   static async forgotPassword(email) {
     try {
+      if (!email) {
+        throw new Error("Email is required");
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error("Please provide a valid email address");
+      }
+
       const user = await User.findOne({ email });
 
       if (!user) {
-        throw new Error("User not found");
+        console.log(
+          `Password reset attempted for non-existent email: ${email}`
+        );
+        return "Password reset link sent successfully";
       }
 
       const resetToken = jwt.sign(
@@ -104,32 +130,53 @@ class UserService {
         process.env.JWTSECRET,
         { expiresIn: "1h" }
       );
+
       user.resetToken = resetToken;
       const resetTokenExpiry = Date.now() + 3600000;
       user.resetTokenExpiry = resetTokenExpiry;
 
       await user.save();
 
-      const transporter = nodemailer.createTransport({
+      const transporter = nodemailer.createTransporter({
         service: "gmail",
         auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
       });
 
+      const baseUrl = process.env.BASE_URL || "http://localhost:3000";
       const mailOptions = {
         to: user.email,
         subject: "Password Reset",
-        text: `Click the password reset link: http://localhost:3000/reset-password/${resetToken}`,
+        html: `<h2>Password Reset Request</h2>
+        <p>Click the link below to reset your password:</p>
+        <a href="${baseUrl}/reset-password/${resetToken}">Reset Password</a>
+        <p>This link will expire in 1 hour.</p>
+        <p>If you didn't request this, please ignore this email.</p>`,
       };
 
       await transporter.sendMail(mailOptions);
       return "Password reset link sent successfully";
     } catch (err) {
+      if (err.code === "EAUTH" || err.code === "ECONNECTION") {
+        throw new Error("Email service temporarily unavailable");
+      }
       throw new Error(err.message);
     }
   }
 
   static async resetPassword(token, newPassword) {
     try {
+      if (!token) {
+        throw new Error("Reset token is required");
+      }
+
+      if (!newPassword) {
+        throw new Error("New password is required");
+      }
+
+      if (newPassword.length < 8) {
+        throw new Error("Password must be at least 8 characters long");
+      }
+
       const decoded = jwt.verify(token, process.env.JWTSECRET);
       const user = await User.findOne({
         email: decoded.email,
@@ -153,14 +200,38 @@ class UserService {
 
       return "Password reset succesfully";
     } catch (err) {
+      if (err.name === "JsonWebTokenError") {
+        throw new Error("Invalid token");
+      }
+
+      if (err.name === "TokenExpiredError") {
+        throw new Error("Token expired");
+      }
       throw new Error(err.message);
     }
   }
 
-  static async GetUsers() {
+  static async getUsers(page = 1, limit = 10) {
     try {
-      const users = await User.find({}).select("-password -resetToken");
-      return users;
+      const skip = (page - 1) * limit;
+      const users = await User.find({})
+        .select("-password -resetToken -resetTokenExpiry")
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 });
+
+      const total = await User.countDocuments({});
+
+      return {
+        users,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+          totalUsers: total,
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1,
+        },
+      };
     } catch (err) {
       throw new Error(err.message);
     }
