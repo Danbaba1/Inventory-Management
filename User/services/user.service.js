@@ -156,6 +156,15 @@ class UserService {
       throw new Error(err.message);
     }
   }
+
+  static async GetUsers() {
+    try {
+      const users = await User.find({}).select("-password -resetToken");
+      return users;
+    } catch (err) {
+      throw new Error(err.message);
+    }
+  }
 }
 
 export default UserService;
