@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import User from "./user.model.js";
+import User from "../model/user.model.js";
 import nodemailer from "nodemailer";
 
 class UserService {
@@ -24,17 +24,23 @@ class UserService {
 
       const newAdmin = new User({
         name,
+        email: "admin@gmail.com",
         password: hashedPassword,
         role: "admin",
       });
 
       await newAdmin.save();
+      const payload = { admin: { id: newAdmin._id, role: newAdmin.role } };
+      const token = jwt.sign(payload, process.env.JWT_SECRET, {
+        expiresIn: "1h",
+      });
       return {
         message: "Admin created successfully",
         admin: {
           id: newAdmin._id,
           name: newAdmin.name,
           role: newAdmin.role,
+          token,
         },
       };
     } catch (err) {
@@ -88,7 +94,7 @@ class UserService {
 
       const jwtToken = jwt.sign(
         { userId: user._id, email: user.email },
-        process.env.JWTSECRET,
+        process.env.JWT_SECRET,
         { expiresIn: "24h" }
       );
 
@@ -127,7 +133,7 @@ class UserService {
 
       const resetToken = jwt.sign(
         { email: user.email },
-        process.env.JWTSECRET,
+        process.env.JWT_SECRET,
         { expiresIn: "1h" }
       );
 
@@ -177,7 +183,7 @@ class UserService {
         throw new Error("Password must be at least 8 characters long");
       }
 
-      const decoded = jwt.verify(token, process.env.JWTSECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findOne({
         email: decoded.email,
         resetToken: token,

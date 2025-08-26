@@ -1,20 +1,10 @@
-import express from "express";
-import UserRoutes from "./User/routes/user.route.js";
+import app from "./app.js";
+import dotenv from "dotenv";
 
-const app = express();
-
-import { DB } from "./db.js";
-
-DB();
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use("./users", UserRoutes);
+dotenv.config();
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`server is running on port ${PORT}`);
-});
 
-export default app;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});

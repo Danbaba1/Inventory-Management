@@ -4,7 +4,6 @@ const ProductSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      unique: true,
       required: true,
       trim: true,
       maxLength: 200,
@@ -24,13 +23,16 @@ const ProductSchema = new mongoose.Schema(
   }
 );
 
-ProductSchema.index({ name: 1 });
+ProductSchema.index({ name: 1 }, { unique: true });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ isAvailable: 1 });
+
+ProductSchema.index({ category: 1, isAvailable: 1 });
+ProductSchema.index({ name: "text", description: "text" });
 
 ProductSchema.virtual("inStock").get(function () {
   return this.quantity > 0 && this.isAvailable;
 });
 
-const Product = new mongoose.model("Product", ProductSchema);
+const Product = mongoose.model("Product", ProductSchema);
 export default Product;

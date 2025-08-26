@@ -4,7 +4,6 @@ const CategorySchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      unique: true,
       required: true,
       trim: true,
       maxLength: 100,
@@ -15,7 +14,7 @@ const CategorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-CategorySchema.index({ name: 1 });
+CategorySchema.index({ name: 1 }, { unique: true });
 CategorySchema.index({ isActive: 1 });
 
 const Category = mongoose.model("Category", CategorySchema);

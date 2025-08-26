@@ -49,7 +49,7 @@ class InventoryService {
   static async decrementQuantity(productId, quantity, userId) {
     try {
       if (!productId || !quantity || !userId) {
-        throw new Error("Product ID, quantity,and user ID are required");
+        throw new Error("Product ID, quantity, and user ID are required");
       }
 
       if (quantity <= 0) {
@@ -70,9 +70,9 @@ class InventoryService {
       await product.save();
 
       const usage = new UsageHistory({
-        product: id,
+        product: productId,
         user: userId,
-        oldquantity,
+        oldQuantity,
         newQuantity: product.quantity,
         quantityUsed: Number(quantity),
       });
@@ -153,7 +153,7 @@ class InventoryService {
           currentPage: page,
           totalPages: Math.ceil(total / limit),
           totalRecords: total,
-          hasNextpage: page < Math.ceil(total / limit),
+          hasNextPage: page < Math.ceil(total / limit),
           hasPrevPage: page > 1,
         },
       };
