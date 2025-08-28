@@ -30,10 +30,17 @@ class UserService {
       });
 
       await newAdmin.save();
-      const payload = { admin: { id: newAdmin._id, role: newAdmin.role } };
+
+      const payload = {
+        userId: newAdmin._id,
+        email: newAdmin.email,
+        role: newAdmin.role,
+      };
+
       const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: "1h",
+        expiresIn: "24h",
       });
+
       return {
         message: "Admin created successfully",
         admin: {
@@ -220,13 +227,16 @@ class UserService {
   static async getUsers(page = 1, limit = 10) {
     try {
       const skip = (page - 1) * limit;
-      const users = await User.find({})
+
+      const query = { role: { $ne: "admin" } };
+
+      const users = await User.find(query)
         .select("-password -resetToken -resetTokenExpiry")
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 });
 
-      const total = await User.countDocuments({});
+      const total = await User.countDocuments(query);
 
       return {
         users,

@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const TopUpSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
@@ -21,6 +26,11 @@ const TopUpSchema = new mongoose.Schema(
 
 const UsageHistorySchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
@@ -38,16 +48,16 @@ const UsageHistorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-TopUpSchema.index({ product: 1 });
-TopUpSchema.index({ user: 1 });
-TopUpSchema.index({ createdAt: -1 });
+TopUpSchema.index({ business: 1, product: 1 });
+TopUpSchema.index({ business: 1, user: 1 });
+TopUpSchema.index({ business: 1, createdAt: -1 });
 
-UsageHistorySchema.index({ product: 1 });
-UsageHistorySchema.index({ user: 1 });
-UsageHistorySchema.index({ createdAt: -1 });
+UsageHistorySchema.index({ business: 1, product: 1 });
+UsageHistorySchema.index({ business: 1, user: 1 });
+UsageHistorySchema.index({ business: 1, createdAt: -1 });
 
-TopUpSchema.index({ product: 1, createdAt: -1 });
-UsageHistorySchema.index({ product: 1, user: 1, createdAt: -1 });
+TopUpSchema.index({ business: 1, product: 1, createdAt: -1 });
+UsageHistorySchema.index({ business: 1, product: 1, user: 1, createdAt: -1 });
 
 const TopUp = mongoose.model("TopUp", TopUpSchema);
 const UsageHistory = mongoose.model("UsageHistory", UsageHistorySchema);

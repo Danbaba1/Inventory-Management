@@ -8,14 +8,19 @@ const CategorySchema = new mongoose.Schema(
       trim: true,
       maxLength: 100,
     },
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+    },
     isActive: { type: Boolean, default: true },
     description: { type: String, maxlength: 500 },
   },
   { timestamps: true }
 );
 
-CategorySchema.index({ name: 1 }, { unique: true });
-CategorySchema.index({ isActive: 1 });
+CategorySchema.index({ name: 1, business: 1 }, { unique: true });
+CategorySchema.index({ business: 1, isActive: 1 });
 
 const Category = mongoose.model("Category", CategorySchema);
 export default Category;

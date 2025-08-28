@@ -8,6 +8,11 @@ const ProductSchema = new mongoose.Schema(
       trim: true,
       maxLength: 200,
     },
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+    },
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
@@ -23,12 +28,12 @@ const ProductSchema = new mongoose.Schema(
   }
 );
 
-ProductSchema.index({ name: 1 }, { unique: true });
-ProductSchema.index({ category: 1 });
-ProductSchema.index({ isAvailable: 1 });
+ProductSchema.index({ name: 1, business: 1 }, { unique: true });
+ProductSchema.index({ business: 1, category: 1 });
+ProductSchema.index({ business: 1, isAvailable: 1 });
 
-ProductSchema.index({ category: 1, isAvailable: 1 });
-ProductSchema.index({ name: "text", description: "text" });
+ProductSchema.index({ business: 1, category: 1, isAvailable: 1 });
+ProductSchema.index({ business: 1, name: "text", description: "text" });
 
 ProductSchema.virtual("inStock").get(function () {
   return this.quantity > 0 && this.isAvailable;

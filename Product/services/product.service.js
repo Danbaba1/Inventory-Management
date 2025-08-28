@@ -124,7 +124,7 @@ class ProductService {
       if (price !== undefined) product.price = Number(price);
       if (quantity !== undefined) product.quantity = Number(quantity);
 
-      const updatedProduct = await Product.save();
+      const updatedProduct = await product.save();
       await updatedProduct.populate("category", "name description");
       return {
         message: "Product updated successfully",
