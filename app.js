@@ -1,13 +1,13 @@
 import express from "express";
-import { UserRoutes } from "./user/routes/user.route.js";
-import { ProductRoutes } from "./product/routes/product.route.js";
-import { CategoryRoutes } from "./category/routes/category.route.js";
-import { InventoryRoutes } from "./inventory/routes/inventory.route.js";
-import { BusinessRoutes } from "./business/routes/business.route.js";
+import { UserRoutes } from "./src/routes/user.route.js";
+import { ProductRoutes } from "./src/routes/product.route.js";
+import { CategoryRoutes } from "./src/routes/category.route.js";
+import { InventoryRoutes } from "./src/routes/inventory.route.js";
+import { BusinessRoutes } from "./src/routes/business.route.js";
 
 const app = express();
 
-import { DB } from "./db.js";
+import { DB } from "./src/database/db.js";
 
 DB();
 

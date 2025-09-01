@@ -1,0 +1,262 @@
+{
+  "info": {
+    "name": "User Authentication API with OTP",
+    "description": "Complete user authentication system with email verification using OTP",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/users",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "description": "User registration, login, and email verification endpoints",
+      "item": [
+        {
+          "name": "Register User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('userId', response.userId);",
+                  "    pm.environment.set('userEmail', response.email);",
+                  "    pm.test('Registration successful', () => {",
+                  "        pm.expect(response.message).to.include('registered successfully');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"phone\": \"1234567890\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["register"]
+            },
+            "description": "### Register New User\n\nCreates a new user account and sends an OTP to the provided email for verification.\n\n#### Request Body:\n- `name` (string, required): User's full name (2-50 characters)\n- `phone` (string, required): Valid phone number\n- `email` (string, required): Valid email address\n- `password` (string, required): Password (minimum 8 characters)\n\n#### Success Response (201):\n```json\n{\n  \"message\": \"User registered successfully...\",\n  \"userId\": \"64a1b2c3d4e5f6789abcdef0\",\n  \"email\": \"john@example.com\",\n  \"nextStep\": \"Please check your email and verify using the OTP sent\"\n}\n```\n\n#### Error Responses:\n- `400` - Validation errors\n- `409` - User already exists\n- `503` - Email service unavailable\n\n#### Notes:\n- User receives a 6-digit OTP valid for 10 minutes\n- Account is created but unverified until email verification\n- If user already exists but unverified, new OTP is sent"
+          }
+        },
+        {
+          "name": "Verify Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.test('Email verified successfully', () => {",
+                  "        pm.expect(response.message).to.include('verified successfully');",
+                  "        pm.expect(response.user.isEmailVerified).to.be.true;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/verify-email",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify-email"]
+            },
+            "description": "### Verify Email with OTP\n\nVerifies user's email address using the OTP sent during registration.\n\n#### Request Body:\n- `email` (string, required): User's email address\n- `otp` (string, required): 6-digit OTP from email\n\n#### Success Response (200):\n```json\n{\n  \"message\": \"Email verified successfully\",\n  \"user\": {\n    \"id\": \"64a1b2c3d4e5f6789abcdef0\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"isEmailVerified\": true\n  }\n}\n```\n\n#### Error Responses:\n- `400` - Invalid/expired OTP, already verified\n- `404` - User not found\n- `429` - Too many failed attempts (max 5)\n\n#### Security Features:\n- Maximum 5 verification attempts per OTP\n- OTP expires after 10 minutes\n- Failed attempts are tracked\n- Welcome email sent upon successful verification"
+          }
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resend-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["resend-otp"]
+            },
+            "description": "### Resend Verification OTP\n\nResends verification OTP to user's email address.\n\n#### Request Body:\n- `email` (string, required): User's email address\n\n#### Success Response (200):\n```json\n{\n  \"message\": \"Verification OTP resent successfully\"\n}\n```\n\n#### Rate Limiting:\n- 1 minute between OTP requests\n- Maximum 5 OTP requests per hour per email/IP\n\n#### Error Responses:\n- `400` - Email already verified\n- `404` - User not found\n- `429` - Rate limit exceeded\n- `503` - Email service unavailable"
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('authToken', response.token);",
+                  "    pm.test('Login successful', () => {",
+                  "        pm.expect(response.token).to.not.be.empty;",
+                  "        pm.expect(response.user.email).to.not.be.empty;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["login"]
+            },
+            "description": "### User Login\n\nAuthenticates user and returns JWT token. Requires verified email.\n\n#### Prerequisites:\n- User must be registered\n- Email must be verified\n- Account must be active\n\n#### Request Body:\n- `email` (string, required): User's email address\n- `password` (string, required): User's password\n\n#### Success Response (200):\n```json\n{\n  \"message\": \"Login successful\",\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"user\": {\n    \"id\": \"64a1b2c3d4e5f6789abcdef0\",\n    \"email\": \"john@example.com\",\n    \"name\": \"John Doe\",\n    \"role\": \"user\"\n  }\n}\n```\n\n#### Error Responses:\n- `401` - Invalid credentials, user not found\n- `403` - Email not verified, account deactivated\n\n#### Token Usage:\nInclude the returned token in subsequent requests:\n```\nAuthorization: Bearer <token>\n```"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Password Management",
+      "description": "Password reset and recovery endpoints",
+      "item": [
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/forgot/password",
+              "host": ["{{baseUrl}}"],
+              "path": ["forgot", "password"]
+            },
+            "description": "### Request Password Reset\n\nSends password reset link to verified email address.\n\n#### Prerequisites:\n- User must exist\n- Email must be verified\n\n#### Request Body:\n- `email` (string, required): User's verified email address\n\n#### Success Response (200):\n```json\n{\n  \"message\": \"Password reset link sent successfully\"\n}\n```\n\n#### Error Responses:\n- `400` - Invalid email format\n- `403` - Email not verified\n- `503` - Email service unavailable\n\n#### Security:\n- Reset link expires in 1 hour\n- Only works for verified email addresses"
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"reset_token_from_email\",\n  \"newPassword\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reset/password",
+              "host": ["{{baseUrl}}"],
+              "path": ["reset", "password"]
+            },
+            "description": "### Reset Password\n\nResets user password using the token from email.\n\n#### Request Body:\n- `token` (string, required): Reset token from email link\n- `newPassword` (string, required): New password (minimum 8 characters)\n\n#### Success Response (200):\n```json\n{\n  \"message\": \"Password reset successfully\"\n}\n```\n\n#### Error Responses:\n- `400` - Invalid/expired token, weak password\n- `401` - Token expired\n\n#### Security:\n- Token is single-use only\n- Expires after 1 hour\n- Password must meet strength requirements"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Operations",
+      "description": "Admin-only endpoints requiring special authorization",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Users per page (1-100, default: 10)"
+                }
+              ]
+            },
+            "description": "### Get All Users (Admin Only)\n\nRetrieves paginated list of all users (excluding admins).\n\n#### Authorization:\n- Requires admin role\n- Must include valid JWT token\n\n#### Query Parameters:\n- `page` (number, optional): Page number (default: 1)\n- `limit` (number, optional): Users per page (1-100, default: 10)\n\n#### Success Response (200):\n```json\n{\n  \"message\": \"Users retrieved successfully\",\n  \"users\": [\n    {\n      \"_id\": \"64a1b2c3d4e5f6789abcdef0\",\n      \"name\": \"John Doe\",\n      \"email\": \"john@example.com\",\n      \"phone\": \"1234567890\",\n      \"role\": \"user\",\n      \"isActive\": true,\n      \"isEmailVerified\": true,\n      \"createdAt\": \"2024-01-15T10:30:00.000Z\"\n    }\n  ],\n  \"pagination\": {\n    \"currentPage\": 1,\n    \"totalPages\": 5,\n    \"totalUsers\": 47,\n    \"hasNext\": true,\n    \"hasPrev\": false\n  }\n}\n```\n\n#### Error Responses:\n- `401` - Invalid/missing token\n- `403` - Not admin, email not verified\n- `400` - Invalid pagination parameters"
+          }
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  }
+}
