@@ -1,4 +1,4 @@
-import Business from "../Business/model/business.model.js";
+import Business from "../business/model/business.model.js";
 
 export const verifyBusinessOwnership = async (req, res, next) => {
   try {

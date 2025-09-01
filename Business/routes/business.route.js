@@ -1,6 +1,6 @@
 import express from "express";
 import BusinessController from "../controllers/business.controller.js";
-import { verifyBusinessOwnership } from "../../Middleware/business.middleware.js";
+import { verifyBusinessOwnership } from "../../middleware/business.middleware.js";
 
 const router = express.Router();
 

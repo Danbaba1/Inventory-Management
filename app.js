@@ -1,9 +1,9 @@
 import express from "express";
-import { UserRoutes } from "./User/routes/user.route.js";
-import { ProductRoutes } from "./Product/routes/product.route.js";
-import { CategoryRoutes } from "./Category/routes/category.route.js";
-import { InventoryRoutes } from "./Inventory/routes/inventory.route.js";
-import { BusinessRoutes } from "./Business/routes/business.route.js";
+import { UserRoutes } from "./user/routes/user.route.js";
+import { ProductRoutes } from "./product/routes/product.route.js";
+import { CategoryRoutes } from "./category/routes/category.route.js";
+import { InventoryRoutes } from "./inventory/routes/inventory.route.js";
+import { BusinessRoutes } from "./business/routes/business.route.js";
 
 const app = express();
 

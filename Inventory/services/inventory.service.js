@@ -1,5 +1,5 @@
 import { TopUp, UsageHistory } from "../model/inventory.model.js";
-import Product from "../../Product/model/product.model.js";
+import Product from "../../product/model/product.model.js";
 
 class InventoryService {
   static async incrementQuantity(productId, quantity, userId) {

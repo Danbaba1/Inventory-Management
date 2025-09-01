@@ -1,5 +1,5 @@
 import Product from "../model/product.model.js";
-import Category from "../../Category/model/category.model.js";
+import Category from "../../category/model/category.model.js";
 
 class ProductService {
   static async createProduct(name, categoryId, quantity, price, description) {
