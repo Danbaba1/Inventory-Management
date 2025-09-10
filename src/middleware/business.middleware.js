@@ -2,7 +2,7 @@ import Business from "../models/business.model.js";
 
 export const verifyBusinessOwnership = async (req, res, next) => {
   try {
-    const { id } = req.query.id || req.query.businessId || req.body.businessId;
+    const id = req.params.id || req.query.id || req.body.businessId;
 
     if (!id) {
       return res.status(400).json({
@@ -11,12 +11,12 @@ export const verifyBusinessOwnership = async (req, res, next) => {
       });
     }
 
-    const userId = req.user?.userId || req.userId;
+    const userId = req.user?.userId;
 
     if (!userId) {
       return res.status(401).json({
         error: "Unauthorized",
-        nessage: "User authentication required",
+        message: "User authentication required",
       });
     }
 

@@ -3,15 +3,8 @@ import BusinessService from "../services/business.service.js";
 class BusinessController {
   static async register(req, res) {
     try {
-      const { userId } = req.query;
-      const businessData = {
-        name: req.body.name,
-        type: req.body.type,
-        categories: req.body.categories || [],
-        description: req.body.categories || "",
-        address: req.body.categories || {},
-        contactInfo: req.body.contactInfo || {},
-      };
+      const userId = req.user?.userId;
+      const businessData = req.body;
 
       const result = await BusinessService.registerBusiness(
         businessData,
@@ -21,9 +14,9 @@ class BusinessController {
       res.status(200).json(result);
     } catch (err) {
       if (
-        err.name === "Please provide both name and type" ||
-        err.name === "User ID is required to register a business" ||
-        err.name === "Business with this name already exists"
+        err.message === "Please provide both name and type" ||
+        err.message === "User ID is required to register a business" ||
+        err.message === "Business with this name already exists"
       ) {
         return res.status(400).json({
           error: "Bad Request",
@@ -105,9 +98,10 @@ class BusinessController {
       res.status(200).json(result);
     } catch (err) {
       if (
-        err.name === "Please provide your business ID" ||
-        err.name === "Business does not exist" ||
-        err.name === "You are not authorized to update this business"
+        err.message === "Please provide your business ID" ||
+        err.message === "Business does not exist" ||
+        err.message === "You are not authorized to update this business" ||
+        err.message === "Business with this name already exists"
       ) {
         return res.status(400).json({
           error: "Bad Request",
@@ -125,16 +119,17 @@ class BusinessController {
 
   static async deleteBusiness(req, res) {
     try {
-      const { id, userId } = req.query;
+      const { id } = req.params;
+      const userId = req.user?.userId;
 
       const result = await BusinessService.deleteBusiness(id, userId);
 
       res.status(200).json(result);
     } catch (err) {
       if (
-        err.name === "Business ID is required" ||
-        err.name === "Business does not exist" ||
-        err.name === "You are not authorized to delete this business"
+        err.message === "Business ID is required" ||
+        err.message === "Business does not exist" ||
+        err.message === "You are not authorized to delete this business"
       ) {
         return res.status(400).json({
           error: "Bad Request",

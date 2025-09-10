@@ -5,13 +5,15 @@ class ProductController {
     try {
       const { categoryId } = req.query;
       const { name, quantity, price, description } = req.body;
+      const userId = req.user?.userId;
 
       const result = await ProductService.createProduct(
         name,
         categoryId,
         quantity,
         price,
-        description
+        description,
+        userId
       );
 
       res.status(201).json({
@@ -24,8 +26,12 @@ class ProductController {
         err.message === "Please provide a category" ||
         err.message === "Please provide a valid price" ||
         err.message === "Please provide a valid quantity" ||
-        err.message === "Category does not exist" ||
-        err.message === "Product with name already exists"
+        err.message === "Category does not exist in your business" ||
+        err.message ===
+          "Product with this name already exists in your business" ||
+        err.message ===
+          "You must register a business before creating products" ||
+        err.message === "User authentication required"
       ) {
         return res.status(400).json({
           error: "Bad Request",
@@ -45,6 +51,7 @@ class ProductController {
     try {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 10;
+      const userId = req.user?.userId;
 
       if (page < 1) {
         return res.status(400).json({
@@ -60,13 +67,23 @@ class ProductController {
         });
       }
 
-      const result = await ProductService.getProducts(page, limit);
+      const result = await ProductService.getProducts(page, limit, userId);
 
       res.status(200).json({
         message: "Products retrieved successfully",
         ...result,
       });
     } catch (err) {
+      if (
+        err.message === "You must register a business to view products" ||
+        err.message === "User authentication required"
+      ) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: err.message,
+        });
+      }
+
       console.error("Error getting products", err);
       res.status(500).json({
         error: "Internal Server Error",
@@ -79,8 +96,9 @@ class ProductController {
     try {
       const { id } = req.query;
       const updateData = req.body;
+      const userId = req.user?.userId;
 
-      const result = await ProductService.updateProduct(id, updateData);
+      const result = await ProductService.updateProduct(id, updateData, userId);
       res.status(200).json({
         message: "Product updated successfully",
         result: result,
@@ -89,8 +107,10 @@ class ProductController {
       if (
         err.message === "Product ID is required" ||
         err.message === "Product does not exist" ||
-        err.message === "Product with name already exists" ||
-        err.message === "Category does not exist"
+        err.message === "Product with name already exists in your business" ||
+        err.message === "Category does not exist in your business" ||
+        err.message === "You must own a business to update products" ||
+        err.message === "User authentication required"
       ) {
         return res.status(400).json({
           error: "Bad Request",
@@ -109,8 +129,9 @@ class ProductController {
   static async deleteProduct(req, res) {
     try {
       const { id } = req.query;
+      const userId = req.user?.userId;
 
-      const message = await ProductService.deleteProduct(id);
+      const message = await ProductService.deleteProduct(id, userId);
 
       res.status(200).json({
         message: message,
@@ -118,7 +139,9 @@ class ProductController {
     } catch (err) {
       if (
         err.message === "Product ID is required" ||
-        err.message === "Product does not exist"
+        err.message === "Product does not exist" ||
+        err.message === "You must own a business to delete products" ||
+        err.message === "User authentication required"
       ) {
         return res.status(400).json({
           error: "Bad Request",

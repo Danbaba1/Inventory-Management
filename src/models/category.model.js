@@ -13,6 +13,12 @@ const CategorySchema = new mongoose.Schema(
       ref: "Business",
       required: true,
     },
+    products: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+      },
+    ],
     isActive: { type: Boolean, default: true },
     description: { type: String, maxlength: 500 },
   },

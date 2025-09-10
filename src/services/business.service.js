@@ -67,8 +67,16 @@ class BusinessService {
         ];
       }
 
-      const businesses = await Business.find({ isActive: true })
-        .populate("categories", "name description")
+      const businesses = await Business.find(query)
+        .populate({
+          path: "categories",
+          select: "name description",
+          populate: {
+            path: "products",
+            select: "name price quantity description isAvailable",
+            match: { isAvailable: true },
+          },
+        })
         .populate("owner", "name email")
         .skip(skip)
         .limit(limit)
