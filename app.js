@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", UserRoutes);
 app.use("/api", ProductRoutes);
 app.use("/api", CategoryRoutes);
-app.use("/api", InventoryRoutes);
+app.use("/api/inventory", InventoryRoutes);
 app.use("/api", BusinessRoutes);
 
 export default app;

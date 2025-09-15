@@ -1,23 +1,42 @@
 import express from "express";
 import ProductController from "../controllers/product.controller.js";
-import {
-  authenticateUser,
-  //   authorizeAdmin,
-} from "../middleware/auth.middleware.js";
+import { authenticateUser } from "../middleware/auth.middleware.js";
 
-const router = express.Router();
+const productRouter = express.Router();
 
-router.post("/product", authenticateUser, ProductController.createProduct);
+/**
+ * Product Management Routes
+ * Controllers handle the business logic - see ProductController for detailed implementation
+ */
 
-router.get("/products", authenticateUser, ProductController.getProducts);
+/**
+ * POST /product - Create a new product
+ * Requires authentication
+ */
+productRouter.post("/product", authenticateUser, ProductController.createProduct);
 
-router.put("/product", authenticateUser, ProductController.updateProduct);
+/**
+ * GET /products - Get all products
+ * Requires authentication
+ */
+productRouter.get("/products", authenticateUser, ProductController.getProducts);
 
-router.delete("/product", authenticateUser, ProductController.deleteProduct);
+/**
+ * PUT /product - Update product information
+ * Requires authentication
+ */
+productRouter.put("/product", authenticateUser, ProductController.updateProduct);
 
+/**
+ * DELETE /product - Delete a product
+ * Requires authentication
+ */
+productRouter.delete("/product", authenticateUser, ProductController.deleteProduct);
+
+// Admin routes (commented out - ready for future implementation)
 // router.post("/admin/product", authorizeAdmin, ProductController.createProduct);
 // router.get("/admin/products", authorizeAdmin, ProductController.getProducts);
 // router.put("/admin/product", authorizeAdmin, ProductController.updateProduct);
 // router.delete("/admin/product", authorizeAdmin, ProductController.deleteProduct);
 
-export { router as ProductRoutes };
+export { productRouter as ProductRoutes };

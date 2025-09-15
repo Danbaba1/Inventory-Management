@@ -1,27 +1,48 @@
 import express from "express";
 import InventoryController from "../controllers/inventory.controller.js";
-import { authorizeAdmin } from "../middleware/auth.middleware.js";
+import { authenticateUser } from "../middleware/auth.middleware.js";
 
-const router = express.Router();
+const inventoryRouter = express.Router();
 
-router.post(
+/**
+ * Inventory Management Routes
+ * Controllers handle the business logic - see InventoryController for detailed implementation
+ */
+
+/**
+ * POST /increment - Increment inventory quantity
+ * Requires authentication
+ */
+inventoryRouter.post(
   "/increment",
-  authorizeAdmin,
+  authenticateUser,
   InventoryController.incrementQuantity
 );
 
-router.post("/decrement", InventoryController.decrementQuantity);
+/**
+ * POST /decrement - Decrement inventory quantity
+ * Public endpoint
+ */
+inventoryRouter.post("/decrement", authenticateUser, InventoryController.decrementQuantity);
 
-router.get(
+/**
+ * GET /history/topup - Get inventory top-up history
+ * Requires admin authorization
+ */
+inventoryRouter.get(
   "/history/topup",
-  authorizeAdmin,
+  authenticateUser,
   InventoryController.getTopUpHistory
 );
 
-router.get(
+/**
+ * GET /history/usage - Get inventory usage history
+ * Requires admin authorization
+ */
+inventoryRouter.get(
   "/history/usage",
-  authorizeAdmin,
+  authenticateUser,
   InventoryController.getUsageHistory
 );
 
-export { router as InventoryRoutes };
+export { inventoryRouter as InventoryRoutes };

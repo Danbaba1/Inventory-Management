@@ -4,7 +4,31 @@ import User from "../models/user.model.js";
 import nodemailer from "nodemailer";
 import EmailTemplates from "../utils/emailTemplate.js";
 
+/**
+ * USER SERVICE
+ * Manages user authentication, registration, email verification, and password management
+ * Handles admin creation, OTP verification, and user session management
+ */
 class UserService {
+  /**
+   * Create administrative user with elevated privileges
+   * 
+   * @description Creates an admin user with pre-verified email and generates JWT token
+   * 
+   * Algorithm:
+   * 1. Validate input parameters (name and password)
+   * 2. Check password strength requirements
+   * 3. Verify admin doesn't already exist
+   * 4. Hash password with bcrypt salt
+   * 5. Create admin user with verified status
+   * 6. Generate JWT token for immediate authentication
+   * 
+   * @param {string} name - Admin username (required, must be unique)
+   * @param {string} password - Admin password (required, min 8 characters)
+   * 
+   * @returns {Object} Creation result with admin data and JWT token
+   * @throws {Error} Validation errors, duplicate admin, or database errors
+   */
   static async createAdmin(name, password) {
     try {
       if (!name || !password) {
@@ -57,6 +81,26 @@ class UserService {
     }
   }
 
+  /**
+   * Register new user with email verification workflow
+   * 
+   * @description Complex registration process with email validation and OTP sending
+   * 
+   * Algorithm:
+   * 1. Validate all required fields and email format
+   * 2. Check password strength requirements
+   * 3. Handle existing user scenarios (verified vs unverified)
+   * 4. Hash password and create user record
+   * 5. Initiate email verification process with OTP
+   * 
+   * @param {string} name - User's full name (required)
+   * @param {string} phone - User's phone number (required)
+   * @param {string} password - User password (required, min 8 characters)
+   * @param {string} email - User's email address (required, must be valid format)
+   * 
+   * @returns {Object} Registration result with user ID and verification message
+   * @throws {Error} Validation errors, duplicate verified user, or email service errors
+   */
   static async register(name, phone, password, email) {
     try {
       if (!name || !phone || !password || !email) {
@@ -114,6 +158,23 @@ class UserService {
     }
   }
 
+  /**
+   * Send email verification OTP to user
+   * 
+   * @description Generates and sends OTP with rate limiting and expiry management
+   * 
+   * Algorithm:
+   * 1. Validate user exists and needs verification
+   * 2. Check rate limiting for OTP requests (1 minute cooldown)
+   * 3. Generate new OTP and set expiry (10 minutes)
+   * 4. Update user record with OTP data
+   * 5. Send formatted email with OTP using nodemailer
+   * 
+   * @param {string} email - User's email address for OTP delivery
+   * 
+   * @returns {string} Success message confirming OTP sent
+   * @throws {Error} User not found, already verified, rate limited, or email service errors
+   */
   static async sendVerificationOTP(email) {
     try {
       const user = await User.findOne({ email });
@@ -140,7 +201,7 @@ class UserService {
 
       await user.save();
 
-      const transporter = nodemailer.createTransport({
+      const transporter = nodemailer.createTransporter({
         service: "gmail",
         auth: {
           user: process.env.EMAIL_USER,
@@ -164,6 +225,24 @@ class UserService {
     }
   }
 
+  /**
+   * Verify user's email using OTP
+   * 
+   * @description Validates OTP with attempt limiting and completes email verification
+   * 
+   * Algorithm:
+   * 1. Validate input parameters and user existence
+   * 2. Check if already verified or too many failed attempts
+   * 3. Validate OTP expiry and correctness
+   * 4. Handle failed attempts with remaining count feedback
+   * 5. Complete verification and clear OTP data on success
+   * 
+   * @param {string} email - User's email address
+   * @param {string} otp - One-time password from email
+   * 
+   * @returns {Object} Verification result with user data
+   * @throws {Error} Invalid OTP, expired, too many attempts, or user not found
+   */
   static async verifyEmailOTP(email, otp) {
     try {
       if (!email || !otp) {
@@ -222,6 +301,16 @@ class UserService {
     }
   }
 
+  /**
+   * Send welcome email to newly verified user
+   * 
+   * @description Non-critical email sending for user onboarding
+   * 
+   * @param {string} email - User's email address
+   * @param {string} userName - User's name for personalization
+   * 
+   * @returns {void} Does not throw errors to avoid disrupting user flow
+   */
   static async sendWelcomeEmail(email, userName) {
     try {
       const transporter = nodemailer.createTransporter({
@@ -245,6 +334,16 @@ class UserService {
     }
   }
 
+  /**
+   * Resend verification OTP to user
+   * 
+   * @description Wrapper for sendVerificationOTP with additional validation
+   * 
+   * @param {string} email - User's email address
+   * 
+   * @returns {string} Success message confirming OTP resent
+   * @throws {Error} User not found, already verified, or rate limited
+   */
   static async resendVerificationOTP(email) {
     try {
       const user = await User.findOne({ email });
@@ -268,6 +367,24 @@ class UserService {
     }
   }
 
+  /**
+   * Authenticate user login with email and password
+   * 
+   * @description Complete login workflow with validation and JWT generation
+   * 
+   * Algorithm:
+   * 1. Validate user exists and is verified
+   * 2. Check account active status
+   * 3. Verify password using bcrypt comparison
+   * 4. Generate JWT token with user data
+   * 5. Return authentication result with user info
+   * 
+   * @param {string} email - User's email address
+   * @param {string} password - User's password
+   * 
+   * @returns {Object} Login result with JWT token and user data
+   * @throws {Error} Invalid credentials, unverified email, or deactivated account
+   */
   static async login(email, password) {
     try {
       const user = await User.findOne({ email });
@@ -312,6 +429,23 @@ class UserService {
     }
   }
 
+  /**
+   * Initiate password reset process with email verification
+   * 
+   * @description Secure password reset with token generation and email delivery
+   * 
+   * Algorithm:
+   * 1. Validate email format and user existence
+   * 2. Check email verification status
+   * 3. Generate secure JWT reset token (1 hour expiry)
+   * 4. Store token and expiry in user record
+   * 5. Send password reset email with secure link
+   * 
+   * @param {string} email - User's email address
+   * 
+   * @returns {string} Success message (same for security regardless of user existence)
+   * @throws {Error} Invalid email format, unverified email, or email service errors
+   */
   static async forgotPassword(email) {
     try {
       if (!email) {
@@ -374,6 +508,24 @@ class UserService {
     }
   }
 
+  /**
+   * Complete password reset using secure token
+   * 
+   * @description Validates reset token and updates user password
+   * 
+   * Algorithm:
+   * 1. Validate token and new password requirements
+   * 2. Verify JWT token and extract user email
+   * 3. Find user with matching token and check expiry
+   * 4. Hash new password and update user record
+   * 5. Clear reset token data for security
+   * 
+   * @param {string} token - JWT reset token from email link
+   * @param {string} newPassword - New password (min 8 characters)
+   * 
+   * @returns {string} Success message confirming password reset
+   * @throws {Error} Invalid/expired token, weak password, or user not found
+   */
   static async resetPassword(token, newPassword) {
     try {
       if (!token) {
@@ -409,7 +561,7 @@ class UserService {
 
       await user.save();
 
-      return "Password reset succesfully";
+      return "Password reset successfully";
     } catch (err) {
       if (err.name === "JsonWebTokenError") {
         throw new Error("Invalid token");
@@ -422,6 +574,17 @@ class UserService {
     }
   }
 
+  /**
+   * Retrieve paginated list of users (excluding admins)
+   * 
+   * @description Admin function to fetch all non-admin users with pagination
+   * 
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
+   * 
+   * @returns {Object} Paginated users with metadata and sensitive fields excluded
+   * @throws {Error} Database query errors
+   */
   static async getUsers(page = 1, limit = 10) {
     try {
       const skip = (page - 1) * limit;
@@ -451,6 +614,16 @@ class UserService {
     }
   }
 
+  /**
+   * Get user's email verification status and OTP attempt information
+   * 
+   * @description Provides detailed verification status for UI state management
+   * 
+   * @param {string} email - User's email address
+   * 
+   * @returns {Object} Comprehensive verification status including attempt limits
+   * @throws {Error} User not found or database errors
+   */
   static async getUserVerificationStatus(email) {
     try {
       const user = await User.findOne({ email }).select(

@@ -1,23 +1,42 @@
 import express from "express";
 import CategoryController from "../controllers/category.controller.js";
-import {
-  authenticateUser,
-  //   authorizeAdmin,
-} from "../middleware/auth.middleware.js";
+import { authenticateUser } from "../middleware/auth.middleware.js";
 
-const router = express.Router();
+const categoryRouter = express.Router();
 
-router.post("/category", authenticateUser, CategoryController.createCategory);
+/**
+ * Category Management Routes
+ * Controllers handle the business logic - see CategoryController for detailed implementation
+ */
 
-router.get("/categories", authenticateUser, CategoryController.getCategories);
+/**
+ * POST /category - Create a new category
+ * Requires authentication
+ */
+categoryRouter.post("/category", authenticateUser, CategoryController.createCategory);
 
-router.put("/category", authenticateUser, CategoryController.updateCategory);
+/**
+ * GET /categories - Get all categories
+ * Requires authentication
+ */
+categoryRouter.get("/categories", authenticateUser, CategoryController.getCategories);
 
-router.delete("/category", authenticateUser, CategoryController.deleteCategory);
+/**
+ * PUT /category - Update category information
+ * Requires authentication
+ */
+categoryRouter.put("/category", authenticateUser, CategoryController.updateCategory);
 
+/**
+ * DELETE /category - Delete a category
+ * Requires authentication
+ */
+categoryRouter.delete("/category", authenticateUser, CategoryController.deleteCategory);
+
+// Admin routes (commented out - ready for future implementation)
 // router.post("/admin/category", authorizeAdmin, CategoryController.createCategory);
 // router.get("/admin/categories", authorizeAdmin, CategoryController.getCategories);
 // router.put("/admin/category", authorizeAdmin, CategoryController.updateCategory);
 // router.delete("/admin/category", authorizeAdmin, CategoryController.deleteCategory);
 
-export { router as CategoryRoutes };
+export { categoryRouter as CategoryRoutes };

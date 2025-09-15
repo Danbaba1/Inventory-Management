@@ -5,14 +5,31 @@ import { verifyBusinessOwnership } from "../middleware/business.middleware.js";
 
 const router = express.Router();
 
+/**
+ * Business Management Routes
+ * Controllers handle the business logic - see BusinessController for detailed implementation
+ */
+
+/**
+ * POST /register/business - Register a new business
+ * Requires authentication
+ */
 router.post(
   "/register/business",
   authenticateUser,
   BusinessController.register
 );
 
+/**
+ * GET /businesses - Get all businesses
+ * Public endpoint
+ */
 router.get("/businesses", BusinessController.getBusinesses);
 
+/**
+ * PUT /business/:userId - Update business information
+ * Requires authentication and business ownership verification
+ */
 router.put(
   "/business/:userId",
   authenticateUser,
@@ -20,6 +37,10 @@ router.put(
   BusinessController.updateBusiness
 );
 
+/**
+ * DELETE /business/:userId - Delete a business
+ * Requires authentication and business ownership verification
+ */
 router.delete(
   "/business/:userId",
   authenticateUser,

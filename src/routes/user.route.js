@@ -6,26 +6,53 @@ import {
 } from "../middleware/auth.middleware.js";
 import ValidationMiddleware from "../validation/validation.middleware.js";
 
-const router = express.Router();
+const userRouter = express.Router();
+
+/**
+ * User Management Routes
+ * Controllers handle the business logic - see UserController for detailed implementation
+ */
 
 // Admin routes
-router.post("/create/admin", UserController.createAdmin);
+/**
+ * POST /create/admin - Create admin user
+ * Public endpoint (likely protected by app-level security)
+ */
+userRouter.post("/create/admin", UserController.createAdmin);
 
 // User authentication routes
-router.post(
+/**
+ * POST /register - Register new user account
+ * Includes registration validation
+ */
+userRouter.post(
   "/register",
   ValidationMiddleware.validateRegistration,
   UserController.register
 );
-router.post("/login", ValidationMiddleware.validateLogin, UserController.login);
+
+/**
+ * POST /login - User login authentication
+ * Includes login validation
+ */
+userRouter.post("/login", ValidationMiddleware.validateLogin, UserController.login);
 
 // Email verification routes
-router.post(
+/**
+ * POST /verify-email - Verify user email with OTP
+ * Includes OTP validation
+ */
+userRouter.post(
   "/verify-email",
   ValidationMiddleware.validateOTP,
   UserController.verifyEmail
 );
-router.post(
+
+/**
+ * POST /resend-otp - Resend email verification OTP
+ * Includes rate limiting and requires unverified email
+ */
+userRouter.post(
   "/resend-otp",
   ValidationMiddleware.validateEmail,
   ValidationMiddleware.rateLimitOTP,
@@ -34,14 +61,27 @@ router.post(
 );
 
 // Password reset routes
-router.post(
+/**
+ * POST /forgot/password - Request password reset
+ * Includes email validation
+ */
+userRouter.post(
   "/forgot/password",
   ValidationMiddleware.validateEmail,
   UserController.forgotPassword
 );
-router.post("/reset/password", UserController.resetPassword);
+
+/**
+ * POST /reset/password - Reset user password
+ * Public endpoint with token validation
+ */
+userRouter.post("/reset/password", UserController.resetPassword);
 
 // Admin protected routes
-router.get("/users", authorizeAdmin, UserController.getUsers);
+/**
+ * GET /users - Get all users
+ * Requires admin authorization
+ */
+userRouter.get("/users", authorizeAdmin, UserController.getUsers);
 
-export { router as UserRoutes };
+export { userRouter as UserRoutes };

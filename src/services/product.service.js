@@ -2,7 +2,35 @@ import Product from "../models/product.model.js";
 import Category from "../models/category.model.js";
 import Business from "../models/business.model.js";
 
+/**
+ * PRODUCT SERVICE
+ * Manages product catalog within business and category context
+ * Enforces business ownership and maintains product-category relationships
+ */
 class ProductService {
+  /**
+   * Create new product within user's business and category
+   * 
+   * @description Complex workflow with multi-level validation and relationship establishment
+   * 
+   * Algorithm:
+   * 1. Validate all required inputs with type checking
+   * 2. Verify user has active business (prerequisite)
+   * 3. Validate category exists within user's business
+   * 4. Check product name uniqueness within business scope
+   * 5. Create product and establish bidirectional relationships
+   * 6. Return structured response with populated data
+   * 
+   * @param {string} name - Product name (required, trimmed, unique per business)
+   * @param {string} categoryId - Category ObjectId (must belong to user's business)
+   * @param {number} quantity - Initial inventory quantity (must be >= 0)
+   * @param {number} price - Product price (must be >= 0)
+   * @param {string} description - Product description (optional, trimmed)
+   * @param {string} userId - User ID for business ownership verification
+   * 
+   * @returns {Object} Creation result with message and product data
+   * @throws {Error} Validation, authorization, relationship errors
+   */
   static async createProduct(
     name,
     categoryId,
@@ -12,6 +40,7 @@ class ProductService {
     userId
   ) {
     try {
+      // Comprehensive input validation
       if (!name || !name.trim()) {
         throw new Error("Please provide a valid product name");
       }
@@ -20,10 +49,12 @@ class ProductService {
         throw new Error("Please provide a category");
       }
 
+      // Business rule validation for price
       if (price === undefined || price < 0) {
         throw new Error("Please provide a valid price");
       }
 
+      // Business rule validation for quantity
       if (quantity === undefined || quantity < 0) {
         throw new Error("Please provide a valid quantity");
       }
@@ -32,6 +63,7 @@ class ProductService {
         throw new Error("User authentication required");
       }
 
+      // Business ownership verification (prerequisite check)
       const userBusiness = await Business.findOne({
         owner: userId,
         isActive: true,
@@ -43,9 +75,11 @@ class ProductService {
         );
       }
 
-      const category = await Category.findById({
+      // Category validation within business context
+      // Ensures category belongs to user's business and is active
+      const category = await Category.findOne({
         _id: categoryId,
-        business: userBusiness,
+        business: userBusiness._id,
         isActive: true,
       });
 
@@ -53,6 +87,7 @@ class ProductService {
         throw new Error("Category does not exist in your business");
       }
 
+      // Business-scoped uniqueness check for product names
       const existingProduct = await Product.findOne({
         name: name.trim(),
         business: userBusiness._id,
@@ -62,30 +97,35 @@ class ProductService {
         throw new Error("Product with name already exists in your business");
       }
 
+      // Create product entity with validated data
       const product = new Product({
         name: name.trim(),
         category: categoryId,
         business: userBusiness._id,
-        quantity: Number(quantity),
-        price: Number(price),
+        quantity: Number(quantity), // Ensure numeric type
+        price: Number(price), // Ensure numeric type
         description: description?.trim(),
+        // isAvailable defaults to true from schema
       });
 
       await product.save();
 
+      // Establish bidirectional relationship: add product to category
       await Category.findByIdAndUpdate(
         categoryId,
         { $push: { products: product._id } },
         { new: true }
       );
 
+      // Populate relationships for comprehensive response
       await product.populate([
         { path: "category", select: "name description" },
         { path: "business", select: "name type" },
       ]);
 
+      // Structured response with relevant fields
       return {
-        mesage: "Product created successfully",
+        message: "Product created successfully",
         product: {
           id: product._id,
           name: product.name,
@@ -103,6 +143,16 @@ class ProductService {
     }
   }
 
+  /**
+   * Retrieve paginated products for user's business
+   * 
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
+   * @param {string} userId - User ID for business ownership verification
+   * 
+   * @returns {Object} Paginated products with metadata
+   * @throws {Error} Authentication or business ownership errors
+   */
   static async getProducts(page = 1, limit = 10, userId) {
     try {
       if (!userId) {
@@ -152,6 +202,16 @@ class ProductService {
     }
   }
 
+  /**
+   * Update existing product within user's business
+   * 
+   * @param {string} id - Product ID to update
+   * @param {Object} updateData - Fields to update
+   * @param {string} userId - User ID for business ownership verification
+   * 
+   * @returns {Object} Update result with message and updated product
+   * @throws {Error} Validation, authorization, or existence errors
+   */
   static async updateProduct(id, updateData, userId) {
     try {
       if (!id) {
@@ -159,7 +219,7 @@ class ProductService {
       }
 
       if (!userId) {
-        throw new Error("User authenticatio required");
+        throw new Error("User authentication required");
       }
 
       const userBusiness = await Business.findOne({
@@ -182,7 +242,8 @@ class ProductService {
 
       const { name, description, price, quantity, categoryId } = updateData;
 
-      if (name && name === product.name) {
+      // Check name uniqueness if name is being updated
+      if (name && name !== product.name) {
         const existingProduct = await Product.findOne({
           name: name.trim(),
           business: userBusiness._id,
@@ -195,6 +256,7 @@ class ProductService {
         }
       }
 
+      // Validate category if being updated
       if (categoryId) {
         const category = await Category.findOne({
           _id: categoryId,
@@ -208,6 +270,7 @@ class ProductService {
         product.category = categoryId;
       }
 
+      // Update fields if provided
       if (name) product.name = name.trim();
       if (description !== undefined) product.description = description?.trim();
       if (price !== undefined) product.price = Number(price);
@@ -228,6 +291,16 @@ class ProductService {
     }
   }
 
+  /**
+   * Soft delete product by setting isAvailable to false
+   * Also removes product reference from category
+   * 
+   * @param {string} id - Product ID to delete
+   * @param {string} userId - User ID for business ownership verification
+   * 
+   * @returns {string} Success message
+   * @throws {Error} Authentication, authorization, or existence errors
+   */
   static async deleteProduct(id, userId) {
     try {
       if (!id) {
@@ -256,9 +329,11 @@ class ProductService {
         throw new Error("Product does not exist");
       }
 
+      // Soft delete: mark as unavailable
       product.isAvailable = false;
       await product.save();
 
+      // Remove product reference from category
       await Category.findByIdAndUpdate(
         product.category,
         {
@@ -267,7 +342,6 @@ class ProductService {
         { new: true }
       );
 
-      // await Product.findByIdAndDelete(id);
       return "Product deleted successfully";
     } catch (err) {
       throw new Error(err.message);
