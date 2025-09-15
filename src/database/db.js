@@ -22,59 +22,35 @@ dotenv.config();
  * Environment -> Configuration -> Mongoose -> MongoDB Atlas/Local
  * 
  * Environment Requirements:
- * - DB environment variable must be set in .env file
+ * - MONGODB_URI environment variable must be set in .env file
  * - Connection string should include authentication credentials
  * - Network access must be configured for MongoDB cluster
  * 
- * Performance Considerations:
- * - Connection pooling enabled by default in Mongoose
- * - Keep-alive connections for optimal performance
- * - Proper error handling prevents application crashes
- * - Connection reuse across multiple database operations
- * 
- * @module DatabaseConnection
- * @requires mongoose - MongoDB ODM for Node.js
- * @requires dotenv - Environment variable loader
+ * Security Best Practices:
+ * - Store connection strings in environment variables ONLY
+ * - Never commit credentials to version control
+ * - Use strong authentication credentials
+ * - Enable SSL/TLS encryption for data in transit
+ * - Restrict network access with IP whitelisting
+ * - Regularly rotate database credentials
  */
 
 /**
  * Database Connection Function
  * 
- * Establishes a connection to MongoDB using the connection string from
- * environment variables. This function initializes the database connection
- * that will be used throughout the application for all data operations.
- * 
- * Connection Flow:
- * 1. Load database URL from environment variables
- * 2. Initialize Mongoose connection with MongoDB
- * 3. Handle connection success and error states
- * 4. Set up connection event listeners
- * 5. Enable connection pooling and optimization
- * 
- * Configuration Options:
- * - Connection string format: mongodb://[username:password@]host[:port]/database
- * - For MongoDB Atlas: mongodb+srv://username:password@cluster.mongodb.net/database
- * - Supports replica sets and sharded clusters
- * - Automatic failover and load balancing
- * 
- * Error Handling:
- * - Connection failures are logged but don't crash the application
- * - Mongoose handles automatic reconnection attempts
- * - Network errors are gracefully handled
- * - Invalid connection strings produce descriptive error messages
+ * Establishes a secure connection to MongoDB using the connection string from
+ * environment variables. Credentials are never exposed in source code.
  * 
  * @function DB
  * @async
  * @returns {Promise<void>} Database connection promise
  * 
  * Environment Variables Required:
- * @param {string} process.env.DB - MongoDB connection string
+ * @param {string} process.env.MONGODB_URI - MongoDB connection string with credentials
  * 
  * @example
- * // .env file configuration
- * DB=mongodb://localhost:27017/inventory_management
- * // OR for MongoDB Atlas
- * DB=mongodb+srv://username:password@cluster.mongodb.net/inventory_management
+ * // .env file configuration (NEVER commit this file!)
+ * MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/inventory_management
  * 
  * // Usage in application startup
  * import { DB } from './config/database.js';
@@ -89,53 +65,35 @@ dotenv.config();
  *     process.exit(1);
  *   }
  * }
- * 
- * Connection Success:
- * - Console output: "DB connected successfully"
- * - Application ready to handle database operations
- * - All models and schemas become available
- * 
- * Connection Errors:
- * - Invalid connection string
- * - Network connectivity issues
- * - Authentication failures
- * - Database server unavailable
- * - Firewall or security group restrictions
- * 
- * Production Considerations:
- * - Use connection pooling for high-traffic applications
- * - Implement connection retry logic with exponential backoff
- * - Monitor connection health and performance metrics
- * - Set appropriate timeout values for production environments
- * - Use replica sets for high availability
- * 
- * Security Best Practices:
- * - Store connection strings in environment variables
- * - Use strong authentication credentials
- * - Enable SSL/TLS encryption for data in transit
- * - Restrict network access with IP whitelisting
- * - Regularly rotate database credentials
  */
 export function DB() {
+  // Validate that the connection string is provided
+  if (!process.env.MONGODB_URI) {
+    console.error("❌ MONGODB_URI environment variable is not set!");
+    console.error("Please add MONGODB_URI to your .env file");
+    process.exit(1);
+  }
+
   mongoose
-    .connect(process.env.DB)
+    .connect(process.env.MONGODB_URI)
     .then(() => {
-      console.log("DB connected successfully");
+      console.log("✅ Database connected successfully");
       
-      // Optional: Set up connection event listeners for production monitoring
+      // Set up connection event listeners for production monitoring
       mongoose.connection.on('disconnected', () => {
-        console.warn('MongoDB disconnected');
+        console.warn('⚠️ MongoDB disconnected');
       });
       
       mongoose.connection.on('reconnected', () => {
-        console.log('MongoDB reconnected');
+        console.log('🔄 MongoDB reconnected');
       });
       
       mongoose.connection.on('error', (err) => {
-        console.error('MongoDB connection error:', err);
+        console.error('❌ MongoDB connection error:', err);
       });
     })
     .catch((err) => {
-      console.error("Database connection failed:", err);
+      console.error("❌ Database connection failed:", err);
+      console.error("Check your MONGODB_URI in .env file");
     });
 }
