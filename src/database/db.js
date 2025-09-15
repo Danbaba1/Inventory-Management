@@ -137,12 +137,5 @@ export function DB() {
     })
     .catch((err) => {
       console.error("Database connection failed:", err);
-      
-      // In production, you might want to implement retry logic here
-      // or gracefully shut down the application
-      if (process.env.NODE_ENV === 'production') {
-        console.error('Critical: Database connection failed in production');
-        // Optional: process.exit(1); // Uncomment to exit on connection failure
-      }
     });
 }
