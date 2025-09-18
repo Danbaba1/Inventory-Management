@@ -1,105 +1,20 @@
-import { TopUp, UsageHistory } from "../models/inventory.model.js";
-import Product from "../models/product.model.js";
+import { supabase } from "../config/supabase.js";
 
 /**
- * INVENTORY SERVICE
- * Manages product inventory with complete audit trail
- * Tracks all quantity changes (increases/decreases) with user attribution
+ * INVENTORY SERVICE - Fixed for PostgreSQL/Supabase
+ * Manages product inventory with complete audit trail using stored procedures
  */
 class InventoryService {
   /**
    * Increment product quantity with audit logging
-   * 
-   * @description Admin-only operation to increase inventory with complete audit trail
-   * 
-   * Algorithm:
-   * 1. Validate inputs and verify product existence
-   * 2. Capture current quantity for audit trail
-   * 3. Apply quantity increment atomically
-   * 4. Create audit record with before/after states
-   * 5. Return operation summary
-   * 
-   * @param {string} productId - Product ObjectId
-   * @param {number} quantity - Quantity to add (must be positive)
-   * @param {string} userId - Business owner ID for audit trail
-   * 
-   * @returns {Object} Operation result with quantity change details
-   * @throws {Error} Validation errors, product not found errors
    */
-  static async incrementQuantity(productId, quantity, userId) {
-    try {
-      // Input validation with type checking
-      if (!productId || !quantity || !userId) {
-        throw new Error("Product ID and quantity are required");
-      }
-
-      // Business rule: quantity must be positive
-      if (quantity <= 0) {
-        throw new Error("Quantity must be greater than 0");
-      }
-
-      // Product existence verification
-      const product = await Product.findById(productId);
-      if (!product) {
-        throw new Error("Product not found");
-      }
-
-      // Capture pre-update state for audit
-      const oldQuantity = product.quantity;
-      
-      // Apply quantity increment
-      product.quantity += Number(quantity);
-      await product.save();
-
-      // Create comprehensive audit record
-      const topUp = new TopUp({
-        business: product.business._id,
-        product: productId,
-        user: userId, // user performing the operation
-        oldQuantity,
-        newQuantity: product.quantity,
-        quantityAdded: Number(quantity),
-        // Timestamps added automatically by schema
-      });
-
-      await topUp.save();
-
-      // Return detailed operation summary
-      return {
-        message: "Quantity added successfully",
-        product: {
-          id: product._id,
-          name: product.name,
-          oldQuantity,
-          newQuantity: product.quantity,
-          quantityAdded: Number(quantity),
-        },
-      };
-    } catch (err) {
-      throw new Error(err.message);
-    }
-  }
-
-  /**
-   * Decrement product quantity with stock validation
-   * 
-   * @description Public operation to reduce inventory with stock level validation
-   * 
-   * Algorithm:
-   * 1. Validate inputs and verify product existence
-   * 2. Check sufficient stock availability
-   * 3. Apply quantity decrement atomically
-   * 4. Create usage audit record
-   * 5. Return operation summary
-   * 
-   * @param {string} productId - Product ObjectId
-   * @param {number} quantity - Quantity to remove (must be positive)
-   * @param {string} userId - User ID performing the operation
-   * 
-   * @returns {Object} Operation result with quantity change details
-   * @throws {Error} Validation errors, insufficient stock errors
-   */
-  static async decrementQuantity(productId, quantity, userId) {
+  static async incrementQuantity(
+    productId,
+    quantity,
+    userId,
+    reason = null,
+    referenceId = null
+  ) {
     try {
       if (!productId || !quantity || !userId) {
         throw new Error("Product ID, quantity, and user ID are required");
@@ -109,40 +24,58 @@ class InventoryService {
         throw new Error("Quantity must be greater than 0");
       }
 
-      const product = await Product.findById(productId);
-      if (!product) {
+      // Get product with business info for verification
+      const { data: product, error } = await supabase
+        .from("products")
+        .select(
+          `
+          *,
+          business:business_id(id, name, owner_id)
+        `
+        )
+        .eq("id", productId)
+        .single();
+
+      if (error || !product) {
         throw new Error("Product not found");
       }
 
-      // Critical business rule: prevent negative inventory
-      if (product.quantity < quantity) {
-        throw new Error("Insufficient quantity available");
+      // Verify user owns the business
+      if (product.business.owner_id !== userId) {
+        throw new Error("You are not authorized to modify this product");
       }
 
       const oldQuantity = product.quantity;
-      product.quantity -= Number(quantity);
-      await product.save();
+      const newQuantity = oldQuantity + Number(quantity);
 
-      // Create usage audit record
-      const usage = new UsageHistory({
-        business: product.business._id,
-        product: productId,
-        user: userId,
-        oldQuantity,
-        newQuantity: product.quantity,
-        quantityUsed: Number(quantity),
-      });
+      // Use stored procedure for atomic operation
+      const { data: transactionData, error: transactionError } =
+        await supabase.rpc("increment_product_quantity", {
+          p_product_id: productId,
+          p_business_id: product.business.id,
+          p_user_id: userId,
+          p_old_quantity: oldQuantity,
+          p_new_quantity: newQuantity,
+          p_quantity_changed: Number(quantity),
+          p_reason: reason || "Stock replenishment",
+          p_reference_id: referenceId,
+        });
 
-      await usage.save();
+      if (transactionError) {
+        console.error("Stored procedure error:", transactionError);
+        throw transactionError;
+      }
 
       return {
-        message: "Quantity removed successfully",
-        product: {
-          id: product._id,
-          name: product.name,
+        message: "Quantity added successfully",
+        transaction: {
+          productId: product.id,
+          productName: product.name,
           oldQuantity,
-          newQuantity: product.quantity,
-          quantityUsed: Number(quantity),
+          newQuantity,
+          quantityChanged: Number(quantity),
+          transactionType: "TOP_UP",
+          transactionId: transactionData,
         },
       };
     } catch (err) {
@@ -151,54 +84,160 @@ class InventoryService {
   }
 
   /**
-   * Retrieve paginated top-up history with optional user filtering
-   * 
-   * @description Admin analytics for inventory replenishment tracking
-   * 
-   * Algorithm:
-   * 1. Build query with optional user filtering
-   * 2. Apply pagination and sorting (most recent first)
-   * 3. Populate related entities for comprehensive view
-   * 4. Calculate pagination metadata
-   * 
-   * @param {string} productId - Product ObjectId to filter by
-   * @param {Object} options - Query options
-   * @param {number} options.page - Page number (default: 1)
-   * @param {number} options.limit - Items per page (default: 10)
-   * @param {string} options.userId - Optional user filter for specific admin
-   * 
-   * @returns {Object} Paginated top-up records with metadata
-   * @throws {Error} Database query errors
+   * Decrement product quantity with stock validation
    */
-  static async getTopUpHistory(productId, options = {}) {
+  static async decrementQuantity(
+    productId,
+    quantity,
+    userId,
+    reason = null,
+    referenceId = null
+  ) {
     try {
-      const { page = 1, limit = 10, userId } = options;
-      const skip = (page - 1) * limit;
-
-      // Build query with optional user filtering
-      const query = { product: productId };
-      if (userId) {
-        query.user = userId; // Filter by specific business owner
+      if (!productId || !quantity || !userId) {
+        throw new Error("Product ID, quantity, and user ID are required");
       }
 
-      // Query with comprehensive population
-      const topUps = await TopUp.find(query)
-        .populate("product", "name description") // Product details
-        .populate("user", "name email") // Business owner who performed action
-        .populate("business", "name type") // Business details
-        .sort({ date: -1, createdAt: -1 }) // Most recent first
-        .skip(skip)
-        .limit(limit);
+      if (quantity <= 0) {
+        throw new Error("Quantity must be greater than 0");
+      }
 
-      const total = await TopUp.countDocuments(query);
+      // Get product with business info
+      const { data: product, error } = await supabase
+        .from("products")
+        .select(
+          `
+          *,
+          business:business_id(id, name, owner_id)
+        `
+        )
+        .eq("id", productId)
+        .single();
+
+      if (error || !product) {
+        throw new Error("Product not found");
+      }
+
+      // Verify user owns the business
+      if (product.business.owner_id !== userId) {
+        throw new Error("You are not authorized to modify this product");
+      }
+
+      if (product.quantity < quantity) {
+        throw new Error(
+          `Insufficient quantity available. Current stock: ${product.quantity}`
+        );
+      }
+
+      const oldQuantity = product.quantity;
+      const newQuantity = oldQuantity - Number(quantity);
+
+      // Use stored procedure for atomic operation
+      const { data: transactionData, error: transactionError } =
+        await supabase.rpc("decrement_product_quantity", {
+          p_product_id: productId,
+          p_business_id: product.business.id,
+          p_user_id: userId,
+          p_old_quantity: oldQuantity,
+          p_new_quantity: newQuantity,
+          p_quantity_changed: Number(quantity),
+          p_reason: reason || "Stock usage",
+          p_reference_id: referenceId,
+        });
+
+      if (transactionError) {
+        console.error("Stored procedure error:", transactionError);
+        throw transactionError;
+      }
 
       return {
-        topUps,
+        message: "Quantity removed successfully",
+        transaction: {
+          productId: product.id,
+          productName: product.name,
+          oldQuantity,
+          newQuantity,
+          quantityChanged: Number(quantity),
+          transactionType: "USAGE",
+          transactionId: transactionData,
+        },
+      };
+    } catch (err) {
+      throw new Error(err.message);
+    }
+  }
+
+  /**
+   * Get complete inventory history with optional filtering
+   */
+  static async getProductInventoryHistory(productId, options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        userId,
+        transactionType,
+        startDate,
+        endDate,
+      } = options;
+
+      if (!productId) {
+        throw new Error("Product ID is required");
+      }
+
+      const offset = (page - 1) * limit;
+
+      let query = supabase
+        .from("inventory_transactions")
+        .select(
+          `
+          *,
+          product:product_id(name,
+           description,
+           category:category_id(
+           id,
+           name,
+           description)),
+          user:user_id(name, email),
+          business:business_id(name, type)
+        `,
+          { count: "exact" }
+        )
+        .eq("product_id", productId);
+
+      if (userId) {
+        query = query.eq("user_id", userId);
+      }
+
+      if (transactionType) {
+        query = query.eq("transaction_type", transactionType);
+      }
+
+      if (startDate) {
+        query = query.gte("created_at", new Date(startDate).toISOString());
+      }
+
+      if (endDate) {
+        query = query.lte("created_at", new Date(endDate).toISOString());
+      }
+
+      const {
+        data: transactions,
+        error,
+        count,
+      } = await query
+        .range(offset, offset + limit - 1)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      return {
+        transactions,
         pagination: {
           currentPage: page,
-          totalPages: Math.ceil(total / limit),
-          totalRecords: total,
-          hasNextPage: page < Math.ceil(total / limit),
+          totalPages: Math.ceil((count || 0) / limit),
+          totalRecords: count || 0,
+          hasNextPage: page < Math.ceil((count || 0) / limit),
           hasPrevPage: page > 1,
         },
       };
@@ -208,45 +247,191 @@ class InventoryService {
   }
 
   /**
-   * Retrieve paginated usage history with optional user filtering
-   * 
-   * @description Analytics for inventory consumption tracking
-   * 
-   * Algorithm: Similar to getTopUpHistory but for usage records
-   * 
-   * @param {string} productId - Product ObjectId to filter by
-   * @param {Object} options - Query options (same as getTopUpHistory)
-   * 
-   * @returns {Object} Paginated usage records with metadata
-   * @throws {Error} Database query errors
+   * Get complete inventory history for all products in a business,
+   * organized by categories
    */
-  static async getUsageHistory(productId, options = {}) {
+  static async getBusinessInventoryHistory(options = {}) {
     try {
-      const { page = 1, limit = 10, userId } = options;
-      const skip = (page - 1) * limit;
+      const {
+        userId,
+        page = 1,
+        limit = 10,
+        transactionType,
+        startDate,
+        endDate,
+        categoryId,
+      } = options;
 
-      const query = { product: productId };
-      if (userId) {
-        query.user = userId;
+      if (!userId) {
+        throw new Error("User ID is required");
       }
 
-      const usages = await UsageHistory.find(query)
-        .populate("product", "name description")
-        .populate("user", "name email")
-        .populate("business", "name type")
-        .sort({ date: -1, createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
+      // Verify user has active business
+      const { data: userBusiness, error: businessError } = await supabase
+        .from("businesses")
+        .select("id, name, type")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
-      const total = await UsageHistory.countDocuments(query);
+      if (businessError || !userBusiness) {
+        throw new Error("You must own a business to view inventory history");
+      }
+
+      const offset = (page - 1) * limit;
+
+      // Build the query for inventory transactions with full relationships
+      let query = supabase
+        .from("inventory_transactions")
+        .select(
+          `
+        id,
+        transaction_type,
+        old_quantity,
+        new_quantity,
+        quantity_changed,
+        reason,
+        reference_id,
+        created_at,
+        updated_at,
+        product:product_id(
+          id,
+          name,
+          description,
+          price,
+          quantity,
+          category:category_id(
+            id,
+            name,
+            description
+          )
+        ),
+        user:user_id(
+          id,
+          name,
+          email
+        )
+      `,
+          { count: "exact" }
+        )
+        .eq("business_id", userBusiness.id);
+
+      // Apply filters
+      if (transactionType) {
+        query = query.eq("transaction_type", transactionType);
+      }
+
+      if (startDate) {
+        query = query.gte("created_at", new Date(startDate).toISOString());
+      }
+
+      if (endDate) {
+        query = query.lte("created_at", new Date(endDate).toISOString());
+      }
+
+      // Filter by category if specified
+      if (categoryId) {
+        // First get products in the category
+        const { data: categoryProducts } = await supabase
+          .from("products")
+          .select("id")
+          .eq("category_id", categoryId)
+          .eq("business_id", userBusiness.id);
+
+        if (categoryProducts && categoryProducts.length > 0) {
+          const productIds = categoryProducts.map((p) => p.id);
+          query = query.in("product_id", productIds);
+        } else {
+          // No products in this category
+          return {
+            business: userBusiness,
+            categories: [],
+            totalTransactions: 0,
+            pagination: {
+              currentPage: page,
+              totalPages: 0,
+              totalRecords: 0,
+              hasNextPage: false,
+              hasPrevPage: false,
+            },
+          };
+        }
+      }
+
+      const {
+        data: transactions,
+        error,
+        count,
+      } = await query
+        .range(offset, offset + limit - 1)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Group transactions by category
+      const categoriesMap = new Map();
+
+      transactions?.forEach((transaction) => {
+        if (!transaction.product || !transaction.product.category) return;
+
+        const category = transaction.product.category;
+        const categoryKey = category.id;
+
+        if (!categoriesMap.has(categoryKey)) {
+          categoriesMap.set(categoryKey, {
+            id: category.id,
+            name: category.name,
+            description: category.description,
+            products: new Map(),
+            totalTransactions: 0,
+          });
+        }
+
+        const categoryData = categoriesMap.get(categoryKey);
+        const productKey = transaction.product.id;
+
+        if (!categoryData.products.has(productKey)) {
+          categoryData.products.set(productKey, {
+            id: transaction.product.id,
+            name: transaction.product.name,
+            description: transaction.product.description,
+            price: transaction.product.price,
+            currentQuantity: transaction.product.quantity,
+            transactions: [],
+          });
+        }
+
+        categoryData.products.get(productKey).transactions.push({
+          id: transaction.id,
+          transactionType: transaction.transaction_type,
+          oldQuantity: transaction.old_quantity,
+          newQuantity: transaction.new_quantity,
+          quantityChanged: transaction.quantity_changed,
+          reason: transaction.reason,
+          referenceId: transaction.reference_id,
+          createdAt: transaction.created_at,
+          updatedAt: transaction.updated_at,
+          user: transaction.user,
+        });
+
+        categoryData.totalTransactions++;
+      });
+
+      // Convert maps to arrays for response
+      const categories = Array.from(categoriesMap.values()).map((category) => ({
+        ...category,
+        products: Array.from(category.products.values()),
+      }));
 
       return {
-        usages,
+        business: userBusiness,
+        categories,
+        totalTransactions: count || 0,
         pagination: {
           currentPage: page,
-          totalPages: Math.ceil(total / limit),
-          totalRecords: total,
-          hasNextPage: page < Math.ceil(total / limit),
+          totalPages: Math.ceil((count || 0) / limit),
+          totalRecords: count || 0,
+          hasNextPage: page < Math.ceil((count || 0) / limit),
           hasPrevPage: page > 1,
         },
       };

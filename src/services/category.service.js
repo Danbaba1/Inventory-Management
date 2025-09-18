@@ -1,33 +1,15 @@
-import Category from "../models/category.model.js";
+import { supabase } from "../config/supabase.js";
 
 /**
- * CATEGORY SERVICE
+ * CATEGORY SERVICE - Fixed for PostgreSQL/Supabase
  * Manages product categorization within business context
- * Enforces business ownership and maintains category-business relationships
  */
 class CategoryService {
   /**
    * Create new category within user's business
-   * 
-   * @description Complex workflow ensuring business ownership and category uniqueness
-   * 
-   * Algorithm:
-   * 1. Validate input and authenticate user
-   * 2. Verify user has active business (prerequisite)
-   * 3. Check category name uniqueness within business scope
-   * 4. Create category and establish bidirectional relationships
-   * 5. Return structured response with populated data
-   * 
-   * @param {string} name - Category name (required, trimmed)
-   * @param {string} description - Category description (optional, trimmed)
-   * @param {string} userId - User ID for business ownership verification
-   * 
-   * @returns {Object} Creation result with message and category data
-   * @throws {Error} Validation, authorization, uniqueness errors
    */
   static async createCategory(name, description, userId) {
     try {
-      // Input validation with meaningful error messages
       if (!name || !name.trim()) {
         throw new Error("Please provide a valid category name");
       }
@@ -36,60 +18,51 @@ class CategoryService {
         throw new Error("User authentication required");
       }
 
-      // Business ownership verification
-      // Only users with active businesses can create categories
-      const userBusiness = await Business.findOne({
-        owner: userId,
-        isActive: true,
-      });
+      // Verify user has active business
+      const { data: userBusiness, error: businessError } = await supabase
+        .from("businesses")
+        .select("id, name")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
-      if (!userBusiness) {
+      if (businessError || !userBusiness) {
         throw new Error(
           "You must register a business before creating categories"
         );
       }
 
-      // Business-scoped uniqueness check
-      // Categories must be unique within each business
-      const existingCategory = await Category.findOne({
-        name: name.trim(),
-        business: userBusiness._id,
-      });
+      // Check category name uniqueness within business
+      const { data: existingCategory } = await supabase
+        .from("categories")
+        .select("id")
+        .eq("name", name.trim())
+        .eq("business_id", userBusiness.id)
+        .single();
 
       if (existingCategory) {
         throw new Error("Category with this name already exists");
       }
 
-      // Create category entity
-      const category = new Category({
-        name: name.trim(),
-        description: description?.trim(),
-        business: userBusiness._id, // Establish business relationship
-      });
+      // Create category
+      const { data: category, error } = await supabase
+        .from("categories")
+        .insert({
+          name: name.trim(),
+          description: description?.trim(),
+          business_id: userBusiness.id,
+        })
+        .select(`
+          *,
+          business:business_id(id, name, type)
+        `)
+        .single();
 
-      await category.save();
+      if (error) throw error;
 
-      // Bidirectional relationship: update business's category array
-      await Business.findByIdAndUpdate(
-        userBusiness._id,
-        { $push: { categories: category._id } },
-        { new: true }
-      );
-
-      // Populate business information for response
-      await category.populate("business", "name type");
-
-      // Structured response with relevant data
       return {
         message: "Category created successfully",
-        category: {
-          id: category._id,
-          name: category.name,
-          business: category.business,
-          description: category.description,
-          isActive: category.isActive,
-          createdAt: category.createdAt,
-        },
+        category,
       };
     } catch (err) {
       throw new Error(err.message);
@@ -98,21 +71,6 @@ class CategoryService {
 
   /**
    * Retrieve categories for user's business with pagination
-   * 
-   * @description Business-scoped category retrieval with pagination support
-   * 
-   * Algorithm:
-   * 1. Authenticate user and verify business ownership
-   * 2. Query categories within business scope (active only)
-   * 3. Apply pagination and sorting
-   * 4. Calculate pagination metadata
-   * 
-   * @param {number} page - Page number (default: 1)
-   * @param {number} limit - Items per page (default: 10)
-   * @param {string} userId - User ID for business scope determination
-   * 
-   * @returns {Object} Paginated categories with metadata
-   * @throws {Error} Authentication, authorization errors
    */
   static async getCategories(page = 1, limit = 10, userId) {
     try {
@@ -120,43 +78,42 @@ class CategoryService {
         throw new Error("User authentication required");
       }
 
-      // Business ownership verification
-      const userBusiness = await Business.findOne({
-        owner: userId,
-        isActive: true,
-      });
+      // Verify business ownership
+      const { data: userBusiness } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
       if (!userBusiness) {
         throw new Error("You must register a business to view categories");
       }
 
-      const skip = (page - 1) * limit;
+      const offset = (page - 1) * limit;
 
-      // Business-scoped query with active filter
-      const categories = await Category.find({
-        business: userBusiness._id,
-        isActive: true,
-      })
-        .populate("business", "name type")
-        .skip(skip)
-        .limit(limit)
-        .sort({
-          createdAt: -1, // Most recent first
-        });
+      // Query categories with products count
+      const { data: categories, error, count } = await supabase
+        .from("categories")
+        .select(`
+          *,
+          business:business_id(name, type),
+          products(id, name, description, is_available)
+        `, { count: "exact" })
+        .eq("business_id", userBusiness.id)
+        .eq("is_active", true)
+        .range(offset, offset + limit - 1)
+        .order("created_at", { ascending: false });
 
-      // Count for pagination
-      const total = await Category.countDocuments({
-        business: userBusiness._id,
-        isActive: true,
-      });
+      if (error) throw error;
 
       return {
         categories,
         pagination: {
           currentPage: page,
-          totalPage: Math.ceil(total / limit),
-          totalCategories: total,
-          hasNext: page < Math.ceil(total / limit),
+          totalPages: Math.ceil((count || 0) / limit),
+          totalCategories: count || 0,
+          hasNext: page < Math.ceil((count || 0) / limit),
           hasPrev: page > 1,
         },
       };
@@ -167,71 +124,65 @@ class CategoryService {
 
   /**
    * Update category with business ownership verification
-   * 
-   * @description Secure update with name uniqueness checking within business scope
-   * 
-   * Algorithm:
-   * 1. Validate inputs and authenticate user
-   * 2. Verify business ownership and category existence
-   * 3. Check name uniqueness if name is changing
-   * 4. Apply partial updates and return populated result
-   * 
-   * @param {string} id - Category ObjectId
-   * @param {string} name - New category name (optional)
-   * @param {string} description - New description (optional)
-   * @param {string} userId - User ID for ownership verification
-   * 
-   * @returns {Object} Update result with success message
-   * @throws {Error} Authorization, validation, uniqueness errors
    */
   static async updateCategory(id, name, description, userId) {
     try {
-      if (!id) {
-        throw new Error("Category ID is required");
+      if (!id || !userId) {
+        throw new Error("Category ID and user authentication required");
       }
 
-      if (!userId) {
-        throw new Error("User authentication required");
-      }
-
-      // Business ownership verification
-      const userBusiness = await Business.findOne({
-        owner: userId,
-        isActive: true,
-      });
+      const { data: userBusiness } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
       if (!userBusiness) {
         throw new Error("You must own a business to update categories");
       }
 
-      // Category existence and ownership verification
-      const category = await Category.findOne({
-        _id: id,
-        business: userBusiness._id,
-      });
+      const { data: category, error } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("id", id)
+        .eq("business_id", userBusiness.id)
+        .single();
 
-      if (!category) {
+      if (error || !category) {
         throw new Error("Category does not exist");
       }
 
-      // Name uniqueness check (only if changing name)
+      // Check name uniqueness if changing
       if (name && name !== category.name) {
-        const existingCategory = await Category.findOne({
-          name: name.trim(),
-          business: userBusiness._id,
-          _id: { $ne: id }, // Exclude current category
-        });
+        const { data: existingCategory } = await supabase
+          .from("categories")
+          .select("id")
+          .eq("name", name.trim())
+          .eq("business_id", userBusiness.id)
+          .neq("id", id)
+          .single();
+
         if (existingCategory) {
-          throw new Error("Category with name already exists");
+          throw new Error("Category with this name already exists");
         }
       }
 
-      // Partial update application
-      if (name) category.name = name.trim();
-      if (description !== undefined) category.description = description?.trim();
+      const updateObj = {};
+      if (name) updateObj.name = name.trim();
+      if (description !== undefined) updateObj.description = description?.trim();
 
-      const updatedCategory = await category.save();
-      await updatedCategory.populate("business", "name type");
+      const { data: updatedCategory, error: updateError } = await supabase
+        .from("categories")
+        .update(updateObj)
+        .eq("id", id)
+        .select(`
+          *,
+          business:business_id(name, type)
+        `)
+        .single();
+
+      if (updateError) throw updateError;
 
       return {
         message: "Category updated successfully",
@@ -244,59 +195,51 @@ class CategoryService {
 
   /**
    * Soft delete category with relationship cleanup
-   * 
-   * @description Implements soft deletion with bidirectional relationship cleanup
-   * 
-   * Algorithm:
-   * 1. Verify ownership and category existence
-   * 2. Set category as inactive (soft delete)
-   * 3. Remove category reference from business's categories array
-   * 4. Preserve category data for potential recovery
-   * 
-   * @param {string} id - Category ObjectId
-   * @param {string} userId - User ID for ownership verification
-   * 
-   * @returns {string} Success message
-   * @throws {Error} Authorization, validation errors
    */
   static async deleteCategory(id, userId) {
     try {
-      if (!id) {
-        throw new Error("Category ID is required");
+      if (!id || !userId) {
+        throw new Error("Category ID and user authentication required");
       }
 
-      if (!userId) {
-        throw new Error("User authentication required");
-      }
-
-      const userBusiness = await Business.findOne({
-        owner: userId,
-        isActive: true,
-      });
+      const { data: userBusiness } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
       if (!userBusiness) {
         throw new Error("You must own a business to delete categories");
       }
 
-      const category = await Category.findOne({
-        _id: id,
-        business: userBusiness._id,
-      });
+      const { data: category } = await supabase
+        .from("categories")
+        .select("id")
+        .eq("id", id)
+        .eq("business_id", userBusiness.id)
+        .single();
 
       if (!category) {
         throw new Error("Category does not exist");
       }
 
-      // Soft delete implementation
-      category.isActive = false;
-      await category.save();
+      // Check if category has products
+      const { data: productsInCategory, count } = await supabase
+        .from("products")
+        .select("id", { count: "exact" })
+        .eq("category_id", id)
+        .eq("is_available", true);
 
-      // Cleanup bidirectional relationship
-      await Business.findByIdAndUpdate(
-        userBusiness._id,
-        { $pull: { categories: category._id } },
-        { new: true }
-      );
+      if (count > 0) {
+        throw new Error(`Cannot delete category. It contains ${count} products. Please move or delete the products first.`);
+      }
+
+      // Soft delete
+      await supabase
+        .from("categories")
+        .update({ is_active: false })
+        .eq("id", id);
 
       return "Category deleted successfully";
     } catch (err) {

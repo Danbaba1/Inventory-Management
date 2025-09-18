@@ -1,46 +1,15 @@
-import Product from "../models/product.model.js";
-import Category from "../models/category.model.js";
-import Business from "../models/business.model.js";
+import { supabase } from "../config/supabase.js";
 
 /**
- * PRODUCT SERVICE
+ * PRODUCT SERVICE - Fixed for PostgreSQL/Supabase
  * Manages product catalog within business and category context
- * Enforces business ownership and maintains product-category relationships
  */
 class ProductService {
   /**
    * Create new product within user's business and category
-   * 
-   * @description Complex workflow with multi-level validation and relationship establishment
-   * 
-   * Algorithm:
-   * 1. Validate all required inputs with type checking
-   * 2. Verify user has active business (prerequisite)
-   * 3. Validate category exists within user's business
-   * 4. Check product name uniqueness within business scope
-   * 5. Create product and establish bidirectional relationships
-   * 6. Return structured response with populated data
-   * 
-   * @param {string} name - Product name (required, trimmed, unique per business)
-   * @param {string} categoryId - Category ObjectId (must belong to user's business)
-   * @param {number} quantity - Initial inventory quantity (must be >= 0)
-   * @param {number} price - Product price (must be >= 0)
-   * @param {string} description - Product description (optional, trimmed)
-   * @param {string} userId - User ID for business ownership verification
-   * 
-   * @returns {Object} Creation result with message and product data
-   * @throws {Error} Validation, authorization, relationship errors
    */
-  static async createProduct(
-    name,
-    categoryId,
-    quantity,
-    price,
-    description,
-    userId
-  ) {
+  static async createProduct(name, categoryId, quantity, price, description, userId) {
     try {
-      // Comprehensive input validation
       if (!name || !name.trim()) {
         throw new Error("Please provide a valid product name");
       }
@@ -49,12 +18,10 @@ class ProductService {
         throw new Error("Please provide a category");
       }
 
-      // Business rule validation for price
       if (price === undefined || price < 0) {
         throw new Error("Please provide a valid price");
       }
 
-      // Business rule validation for quantity
       if (quantity === undefined || quantity < 0) {
         throw new Error("Please provide a valid quantity");
       }
@@ -63,80 +30,67 @@ class ProductService {
         throw new Error("User authentication required");
       }
 
-      // Business ownership verification (prerequisite check)
-      const userBusiness = await Business.findOne({
-        owner: userId,
-        isActive: true,
-      });
+      // Verify user has active business
+      const { data: userBusiness } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
       if (!userBusiness) {
-        throw new Error(
-          "You must register a business before creating products"
-        );
+        throw new Error("You must register a business before creating products");
       }
 
-      // Category validation within business context
-      // Ensures category belongs to user's business and is active
-      const category = await Category.findOne({
-        _id: categoryId,
-        business: userBusiness._id,
-        isActive: true,
-      });
+      // Validate category belongs to user's business
+      const { data: category } = await supabase
+        .from("categories")
+        .select("id, name")
+        .eq("id", categoryId)
+        .eq("business_id", userBusiness.id)
+        .eq("is_active", true)
+        .single();
 
       if (!category) {
         throw new Error("Category does not exist in your business");
       }
 
-      // Business-scoped uniqueness check for product names
-      const existingProduct = await Product.findOne({
-        name: name.trim(),
-        business: userBusiness._id,
-      });
+      // Check product name uniqueness within business
+      const { data: existingProduct } = await supabase
+        .from("products")
+        .select("id")
+        .eq("name", name.trim())
+        .eq("business_id", userBusiness.id)
+        .single();
 
       if (existingProduct) {
-        throw new Error("Product with name already exists in your business");
+        throw new Error("Product with this name already exists in your business");
       }
 
-      // Create product entity with validated data
-      const product = new Product({
-        name: name.trim(),
-        category: categoryId,
-        business: userBusiness._id,
-        quantity: Number(quantity), // Ensure numeric type
-        price: Number(price), // Ensure numeric type
-        description: description?.trim(),
-        // isAvailable defaults to true from schema
-      });
+      // Create product
+      const { data: product, error } = await supabase
+        .from("products")
+        .insert({
+          name: name.trim(),
+          category_id: categoryId,
+          business_id: userBusiness.id,
+          quantity: Number(quantity),
+          price: Number(price),
+          description: description?.trim(),
+          is_available: true,
+        })
+        .select(`
+          *,
+          category:category_id(id, name, description),
+          business:business_id(id, name, type)
+        `)
+        .single();
 
-      await product.save();
+      if (error) throw error;
 
-      // Establish bidirectional relationship: add product to category
-      await Category.findByIdAndUpdate(
-        categoryId,
-        { $push: { products: product._id } },
-        { new: true }
-      );
-
-      // Populate relationships for comprehensive response
-      await product.populate([
-        { path: "category", select: "name description" },
-        { path: "business", select: "name type" },
-      ]);
-
-      // Structured response with relevant fields
       return {
         message: "Product created successfully",
-        product: {
-          id: product._id,
-          name: product.name,
-          category: product.category,
-          business: product.business,
-          quantity: product.quantity,
-          price: product.price,
-          description: product.description,
-          isAvailable: product.isAvailable,
-          createdAt: product.createdAt,
-        },
+        product,
       };
     } catch (err) {
       throw new Error(err.message);
@@ -145,55 +99,69 @@ class ProductService {
 
   /**
    * Retrieve paginated products for user's business
-   * 
-   * @param {number} page - Page number (default: 1)
-   * @param {number} limit - Items per page (default: 10)
-   * @param {string} userId - User ID for business ownership verification
-   * 
-   * @returns {Object} Paginated products with metadata
-   * @throws {Error} Authentication or business ownership errors
    */
-  static async getProducts(page = 1, limit = 10, userId) {
+  static async getProducts(page = 1, limit = 10, userId, filters = {}) {
     try {
       if (!userId) {
         throw new Error("User authentication required");
       }
 
-      const userBusiness = await Business.findOne({
-        owner: userId,
-        isActive: true,
-      });
+      // Verify business ownership
+      const { data: userBusiness } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
       if (!userBusiness) {
         throw new Error("You must register a business to view products");
       }
 
-      const skip = (page - 1) * limit;
+      const offset = (page - 1) * limit;
 
-      const products = await Product.find({
-        business: userBusiness._id,
-        isAvailable: true,
-      })
-        .populate("category", "name description")
-        .populate("business", "name type")
-        .skip(skip)
-        .limit(limit)
-        .sort({
-          createdAt: -1,
-        });
+      let query = supabase
+        .from("products")
+        .select(`
+          *,
+          category:category_id(name, description),
+          business:business_id(name, type)
+        `, { count: "exact" })
+        .eq("business_id", userBusiness.id)
+        .eq("is_available", true);
 
-      const total = await Product.countDocuments({
-        business: userBusiness._id,
-        isAvailable: true,
-      });
+      // Apply filters
+      if (filters.categoryId) {
+        query = query.eq("category_id", filters.categoryId);
+      }
+      if (filters.search) {
+        query = query.or(
+          `name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+        );
+      }
+      if (filters.minPrice) {
+        query = query.gte("price", filters.minPrice);
+      }
+      if (filters.maxPrice) {
+        query = query.lte("price", filters.maxPrice);
+      }
+      if (filters.lowStock) {
+        query = query.lt("quantity", 10); // Define low stock as < 10
+      }
+
+      const { data: products, error, count } = await query
+        .range(offset, offset + limit - 1)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
 
       return {
         products,
         pagination: {
           currentPage: page,
-          totalPage: Math.ceil(total / limit),
-          totalProducts: total,
-          hasNext: page < Math.ceil(total / limit),
+          totalPages: Math.ceil((count || 0) / limit),
+          totalProducts: count || 0,
+          hasNext: page < Math.ceil((count || 0) / limit),
           hasPrev: page > 1,
         },
       };
@@ -203,84 +171,132 @@ class ProductService {
   }
 
   /**
+   * Get a single product by ID with ownership verification
+   */
+  static async getProductById(productId, userId) {
+    try {
+      if (!productId || !userId) {
+        throw new Error("Product ID and user authentication required");
+      }
+
+      // Verify business ownership
+      const { data: userBusiness } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
+
+      if (!userBusiness) {
+        throw new Error("You must own a business to view products");
+      }
+
+      const { data: product, error } = await supabase
+        .from("products")
+        .select(`
+          *,
+          category:category_id(id, name, description),
+          business:business_id(id, name, type)
+        `)
+        .eq("id", productId)
+        .eq("business_id", userBusiness.id)
+        .single();
+
+      if (error || !product) {
+        throw new Error("Product not found");
+      }
+
+      return { product };
+    } catch (err) {
+      throw new Error(err.message);
+    }
+  }
+
+  /**
    * Update existing product within user's business
-   * 
-   * @param {string} id - Product ID to update
-   * @param {Object} updateData - Fields to update
-   * @param {string} userId - User ID for business ownership verification
-   * 
-   * @returns {Object} Update result with message and updated product
-   * @throws {Error} Validation, authorization, or existence errors
    */
   static async updateProduct(id, updateData, userId) {
     try {
-      if (!id) {
-        throw new Error("Product ID is required");
+      if (!id || !userId) {
+        throw new Error("Product ID and user authentication required");
       }
 
-      if (!userId) {
-        throw new Error("User authentication required");
-      }
-
-      const userBusiness = await Business.findOne({
-        owner: userId,
-        isActive: true,
-      });
+      // Verify business ownership
+      const { data: userBusiness } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
       if (!userBusiness) {
         throw new Error("You must own a business to update products");
       }
 
-      const product = await Product.findOne({
-        _id: id,
-        business: userBusiness._id,
-      });
+      // Get current product
+      const { data: product, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("id", id)
+        .eq("business_id", userBusiness.id)
+        .single();
 
-      if (!product) {
+      if (error || !product) {
         throw new Error("Product does not exist");
       }
 
       const { name, description, price, quantity, categoryId } = updateData;
 
-      // Check name uniqueness if name is being updated
+      // Check name uniqueness if changing
       if (name && name !== product.name) {
-        const existingProduct = await Product.findOne({
-          name: name.trim(),
-          business: userBusiness._id,
-          _id: { $ne: id },
-        });
+        const { data: existingProduct } = await supabase
+          .from("products")
+          .select("id")
+          .eq("name", name.trim())
+          .eq("business_id", userBusiness.id)
+          .neq("id", id)
+          .single();
+
         if (existingProduct) {
-          throw new Error(
-            "Product with this name already exists in your business"
-          );
+          throw new Error("Product with this name already exists in your business");
         }
       }
 
-      // Validate category if being updated
-      if (categoryId) {
-        const category = await Category.findOne({
-          _id: categoryId,
-          business: userBusiness._id,
-          isActive: true,
-        });
+      // Validate category if changing
+      if (categoryId && categoryId !== product.category_id) {
+        const { data: category } = await supabase
+          .from("categories")
+          .select("id")
+          .eq("id", categoryId)
+          .eq("business_id", userBusiness.id)
+          .eq("is_active", true)
+          .single();
 
         if (!category) {
           throw new Error("Category does not exist in your business");
         }
-        product.category = categoryId;
       }
 
-      // Update fields if provided
-      if (name) product.name = name.trim();
-      if (description !== undefined) product.description = description?.trim();
-      if (price !== undefined) product.price = Number(price);
-      if (quantity !== undefined) product.quantity = Number(quantity);
+      // Build update object
+      const updateObj = {};
+      if (name) updateObj.name = name.trim();
+      if (description !== undefined) updateObj.description = description?.trim();
+      if (price !== undefined) updateObj.price = Number(price);
+      if (quantity !== undefined) updateObj.quantity = Number(quantity);
+      if (categoryId) updateObj.category_id = categoryId;
 
-      const updatedProduct = await product.save();
-      await updatedProduct.populate([
-        { path: "category", select: "name description" },
-        { path: "business", select: "name type" },
-      ]);
+      const { data: updatedProduct, error: updateError } = await supabase
+        .from("products")
+        .update(updateObj)
+        .eq("id", id)
+        .select(`
+          *,
+          category:category_id(name, description),
+          business:business_id(name, type)
+        `)
+        .single();
+
+      if (updateError) throw updateError;
 
       return {
         message: "Product updated successfully",
@@ -292,55 +308,53 @@ class ProductService {
   }
 
   /**
-   * Soft delete product by setting isAvailable to false
-   * Also removes product reference from category
-   * 
-   * @param {string} id - Product ID to delete
-   * @param {string} userId - User ID for business ownership verification
-   * 
-   * @returns {string} Success message
-   * @throws {Error} Authentication, authorization, or existence errors
+   * Soft delete product by setting is_available to false
    */
   static async deleteProduct(id, userId) {
     try {
-      if (!id) {
-        throw new Error("Product ID is required");
+      if (!id || !userId) {
+        throw new Error("Product ID and user authentication required");
       }
 
-      if (!userId) {
-        throw new Error("User authentication required");
-      }
-
-      const userBusiness = await Business.findOne({
-        owner: userId,
-        isActive: true,
-      });
+      // Verify business ownership
+      const { data: userBusiness } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", userId)
+        .eq("is_active", true)
+        .single();
 
       if (!userBusiness) {
         throw new Error("You must own a business to delete products");
       }
 
-      const product = await Product.findOne({
-        _id: id,
-        business: userBusiness._id,
-      });
+      const { data: product } = await supabase
+        .from("products")
+        .select("id")
+        .eq("id", id)
+        .eq("business_id", userBusiness.id)
+        .single();
 
       if (!product) {
         throw new Error("Product does not exist");
       }
 
-      // Soft delete: mark as unavailable
-      product.isAvailable = false;
-      await product.save();
+      // Check if product has pending inventory transactions
+      const { data: pendingTransactions, count } = await supabase
+        .from("inventory_transactions")
+        .select("id", { count: "exact" })
+        .eq("product_id", id)
+        .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
 
-      // Remove product reference from category
-      await Category.findByIdAndUpdate(
-        product.category,
-        {
-          $pull: { products: product._id },
-        },
-        { new: true }
-      );
+      if (count > 0) {
+        throw new Error("Cannot delete product with recent inventory activity. Please try again later.");
+      }
+
+      // Soft delete
+      await supabase
+        .from("products")
+        .update({ is_available: false })
+        .eq("id", id);
 
       return "Product deleted successfully";
     } catch (err) {

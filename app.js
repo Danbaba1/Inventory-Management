@@ -1,4 +1,5 @@
 import express from "express";
+import cors from 'cors';
 import { UserRoutes } from "./src/routes/user.route.js";
 import { ProductRoutes } from "./src/routes/product.route.js";
 import { CategoryRoutes } from "./src/routes/category.route.js";
@@ -7,17 +8,14 @@ import { BusinessRoutes } from "./src/routes/business.route.js";
 
 const app = express();
 
-import { DB } from "./src/database/db.js";
-
-DB();
-
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/api", UserRoutes);
-app.use("/api", ProductRoutes);
-app.use("/api", CategoryRoutes);
+app.use("/api/users", UserRoutes);
+app.use("/api/products", ProductRoutes);
+app.use("/api/categories", CategoryRoutes);
 app.use("/api/inventory", InventoryRoutes);
-app.use("/api", BusinessRoutes);
+app.use("/api/businesses", BusinessRoutes);
 
 export default app;
