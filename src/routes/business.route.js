@@ -15,7 +15,7 @@ const router = express.Router();
  * Requires authentication
  */
 router.post(
-  "/register/business",
+  "/",
   authenticateUser,
   BusinessController.register
 );
@@ -24,14 +24,14 @@ router.post(
  * GET /businesses - Get all businesses
  * Public endpoint
  */
-router.get("/businesses", BusinessController.getBusinesses);
+router.get("/", BusinessController.getBusinesses);
 
 /**
  * PUT /business/:userId - Update business information
  * Requires authentication and business ownership verification
  */
 router.put(
-  "/business/:userId",
+  "/:id",
   authenticateUser,
   verifyBusinessOwnership,
   BusinessController.updateBusiness
@@ -42,7 +42,7 @@ router.put(
  * Requires authentication and business ownership verification
  */
 router.delete(
-  "/business/:userId",
+  "/:id",
   authenticateUser,
   verifyBusinessOwnership,
   BusinessController.deleteBusiness

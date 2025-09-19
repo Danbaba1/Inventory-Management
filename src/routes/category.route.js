@@ -13,25 +13,25 @@ const categoryRouter = express.Router();
  * POST /category - Create a new category
  * Requires authentication
  */
-categoryRouter.post("/category", authenticateUser, CategoryController.createCategory);
+categoryRouter.post("/", authenticateUser, CategoryController.createCategory);
 
 /**
  * GET /categories - Get all categories
  * Requires authentication
  */
-categoryRouter.get("/categories", authenticateUser, CategoryController.getCategories);
+categoryRouter.get("/", authenticateUser, CategoryController.getCategories);
 
 /**
  * PUT /category - Update category information
  * Requires authentication
  */
-categoryRouter.put("/category", authenticateUser, CategoryController.updateCategory);
+categoryRouter.put("/:id", authenticateUser, CategoryController.updateCategory);
 
 /**
  * DELETE /category - Delete a category
  * Requires authentication
  */
-categoryRouter.delete("/category", authenticateUser, CategoryController.deleteCategory);
+categoryRouter.delete("/:id", authenticateUser, CategoryController.deleteCategory);
 
 // Admin routes (commented out - ready for future implementation)
 // router.post("/admin/category", authorizeAdmin, CategoryController.createCategory);

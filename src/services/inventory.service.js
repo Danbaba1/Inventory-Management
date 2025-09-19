@@ -1,12 +1,28 @@
 import { supabase } from "../config/supabase.js";
 
 /**
- * INVENTORY SERVICE - Fixed for PostgreSQL/Supabase
+ * INVENTORY SERVICE - PostgreSQL/Supabase Implementation
  * Manages product inventory with complete audit trail using stored procedures
+ * Provides atomic operations for inventory management with business authorization
  */
 class InventoryService {
   /**
    * Increment product quantity with audit logging
+   * Creates a TOP_UP transaction using atomic stored procedure
+   * 
+   * @param {string} productId - UUID of the product to increment
+   * @param {number} quantity - Amount to add (must be > 0)
+   * @param {string} userId - UUID of the user performing the operation
+   * @param {string|null} reason - Optional reason for the increment (defaults to "Stock replenishment")
+   * @param {string|null} referenceId - Optional UUID for linking to other transactions
+   * 
+   * @returns {Object} Result object with transaction details
+   * @throws {Error} If validation fails, product not found, or user unauthorized
+   * 
+   * Business Logic:
+   * - Validates user owns the business that owns the product
+   * - Uses stored procedure for atomic quantity update and transaction logging
+   * - Returns old/new quantities and transaction metadata
    */
   static async incrementQuantity(
     productId,
@@ -84,7 +100,23 @@ class InventoryService {
   }
 
   /**
-   * Decrement product quantity with stock validation
+   * Decrement product quantity with stock validation and audit logging
+   * Creates a USAGE transaction using atomic stored procedure
+   * 
+   * @param {string} productId - UUID of the product to decrement
+   * @param {number} quantity - Amount to remove (must be > 0)
+   * @param {string} userId - UUID of the user performing the operation
+   * @param {string|null} reason - Optional reason for the decrement (defaults to "Stock usage")
+   * @param {string|null} referenceId - Optional UUID for linking to other transactions
+   * 
+   * @returns {Object} Result object with transaction details
+   * @throws {Error} If validation fails, insufficient stock, product not found, or user unauthorized
+   * 
+   * Business Logic:
+   * - Validates user owns the business that owns the product
+   * - Checks sufficient stock before attempting decrement
+   * - Uses stored procedure for atomic quantity update and transaction logging
+   * - Prevents negative inventory levels
    */
   static async decrementQuantity(
     productId,
@@ -168,7 +200,24 @@ class InventoryService {
   }
 
   /**
-   * Get complete inventory history with optional filtering
+   * Get complete inventory transaction history for a specific product
+   * Returns paginated results with optional filtering capabilities
+   * 
+   * @param {string} productId - UUID of the product (required)
+   * @param {Object} options - Filtering and pagination options
+   * @param {number} options.page - Page number (default: 1)
+   * @param {number} options.limit - Items per page (default: 10)
+   * @param {string} options.userId - Filter by user who performed transactions
+   * @param {string} options.transactionType - Filter by 'TOP_UP' or 'USAGE'
+   * @param {string} options.startDate - Start date filter (ISO format)
+   * @param {string} options.endDate - End date filter (ISO format)
+   * 
+   * @returns {Object} Paginated transactions with product, user, and business details
+   * @throws {Error} If productId is missing or query fails
+   * 
+   * Returned Data Structure:
+   * - transactions: Array of transaction records with related data
+   * - pagination: Object with currentPage, totalPages, totalRecords, navigation flags
    */
   static async getProductInventoryHistory(productId, options = {}) {
     try {
@@ -247,8 +296,35 @@ class InventoryService {
   }
 
   /**
-   * Get complete inventory history for all products in a business,
-   * organized by categories
+   * Get comprehensive inventory history for all products in a business
+   * Returns data organized by categories with nested product transactions
+   * 
+   * @param {Object} options - Filtering and pagination options
+   * @param {string} options.userId - UUID of the business owner (required)
+   * @param {number} options.page - Page number (default: 1)
+   * @param {number} options.limit - Items per page (default: 10)
+   * @param {string} options.transactionType - Filter by 'TOP_UP' or 'USAGE'
+   * @param {string} options.startDate - Start date filter (ISO format)
+   * @param {string} options.endDate - End date filter (ISO format)
+   * @param {string} options.categoryId - Filter by specific category UUID
+   * 
+   * @returns {Object} Business inventory data organized by categories
+   * @throws {Error} If userId is missing or user has no active business
+   * 
+   * Returned Data Structure:
+   * - business: Business information (id, name, type)
+   * - categories: Array of category objects containing:
+   *   - Category details (id, name, description)
+   *   - products: Array of products in the category with their transactions
+   *   - totalTransactions: Count of transactions in this category
+   * - totalTransactions: Total count across all categories
+   * - pagination: Standard pagination object
+   * 
+   * Business Logic:
+   * - Validates user owns an active business
+   * - Groups transactions by product categories for organized reporting
+   * - Supports category-specific filtering
+   * - Includes current product quantities alongside historical data
    */
   static async getBusinessInventoryHistory(options = {}) {
     try {

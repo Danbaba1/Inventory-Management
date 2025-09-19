@@ -1,12 +1,45 @@
 import { supabase } from "../config/supabase.js";
 
 /**
- * PRODUCT SERVICE - Fixed for PostgreSQL/Supabase
- * Manages product catalog within business and category context
+ * PRODUCT SERVICE - PostgreSQL/Supabase Implementation
+ * Manages product catalog within business and category context with comprehensive validation
+ * Provides full CRUD operations for products with business ownership verification
+ * Maintains data integrity through relationship validation and inventory management integration
  */
 class ProductService {
   /**
-   * Create new product within user's business and category
+   * Create new product within user's business and category with comprehensive validation
+   * Establishes product catalog with proper categorization and initial inventory setup
+   * 
+   * @param {string} name - Product name (required, must be unique within business)
+   * @param {string} categoryId - UUID of the category (required, must exist in user's business)
+   * @param {number} quantity - Initial quantity (required, must be >= 0)
+   * @param {number} price - Product price (required, must be >= 0)
+   * @param {string} description - Product description (optional)
+   * @param {string} userId - UUID of the user creating the product (required)
+   * 
+   * @returns {Object} Creation result with product details including category and business information
+   * @throws {Error} If validation fails, user has no business, category invalid, or name exists
+   * 
+   * Business Logic:
+   * - Validates user owns an active business
+   * - Ensures category exists and belongs to user's business
+   * - Checks product name uniqueness within business scope
+   * - Sets initial inventory quantity and pricing
+   * - Marks product as available by default
+   * - Returns product with populated category and business relationships
+   * 
+   * Validation Rules:
+   * - Name must be non-empty and unique within business
+   * - Category must exist and be owned by user's business
+   * - Price must be non-negative number
+   * - Quantity must be non-negative integer
+   * - User must own an active business
+   * 
+   * Use Cases:
+   * - New product introduction to catalog
+   * - Inventory item setup with initial stock
+   * - Product categorization for organization
    */
   static async createProduct(name, categoryId, quantity, price, description, userId) {
     try {
@@ -98,7 +131,42 @@ class ProductService {
   }
 
   /**
-   * Retrieve paginated products for user's business
+   * Retrieve paginated products for user's business with advanced filtering capabilities
+   * Returns comprehensive product catalog with category and business information for management
+   * 
+   * @param {number} page - Page number for pagination (default: 1)
+   * @param {number} limit - Number of products per page (default: 10)
+   * @param {string} userId - UUID of the user requesting products (required)
+   * @param {Object} filters - Optional filtering criteria
+   * @param {string} filters.categoryId - Filter by specific category UUID
+   * @param {string} filters.search - Search in product name and description (case-insensitive)
+   * @param {number} filters.minPrice - Minimum price filter
+   * @param {number} filters.maxPrice - Maximum price filter
+   * @param {boolean} filters.lowStock - Filter for low stock products (quantity < 10)
+   * 
+   * @returns {Object} Paginated products with category and business details
+   * @throws {Error} If user authentication fails or user has no active business
+   * 
+   * Returned Data Structure:
+   * - products: Array of product objects with:
+   *   - Complete product information (name, description, price, quantity, availability)
+   *   - category: Associated category details (name, description)
+   *   - business: Business information (name, type)
+   * - pagination: Standard pagination object with navigation information
+   * 
+   * Filtering Features:
+   * - Category-based filtering for focused product management
+   * - Text search across name and description fields
+   * - Price range filtering for pricing analysis
+   * - Low stock filtering for inventory management (< 10 units)
+   * - Only shows available products (is_available = true)
+   * 
+   * Use Cases:
+   * - Product catalog browsing and management
+   * - Inventory monitoring and stock alerts
+   * - Category-specific product organization
+   * - Price-based product analysis
+   * - Search functionality for large catalogs
    */
   static async getProducts(page = 1, limit = 10, userId, filters = {}) {
     try {
@@ -171,7 +239,31 @@ class ProductService {
   }
 
   /**
-   * Get a single product by ID with ownership verification
+   * Get a single product by ID with ownership verification and complete relationship data
+   * Returns detailed product information including category and business context
+   * 
+   * @param {string} productId - UUID of the product to retrieve (required)
+   * @param {string} userId - UUID of the user requesting the product (required)
+   * 
+   * @returns {Object} Product details with category and business information
+   * @throws {Error} If product not found, user unauthorized, or user has no active business
+   * 
+   * Business Logic:
+   * - Validates user owns an active business
+   * - Ensures product belongs to user's business
+   * - Returns complete product data with relationships
+   * - Includes category and business information for context
+   * 
+   * Security Features:
+   * - Business ownership verification prevents cross-business access
+   * - Product-business relationship validation
+   * - User authentication requirement
+   * 
+   * Use Cases:
+   * - Product detail viewing for management
+   * - Product editing preparation
+   * - Inventory item inspection
+   * - Product information display
    */
   static async getProductById(productId, userId) {
     try {
@@ -213,7 +305,41 @@ class ProductService {
   }
 
   /**
-   * Update existing product within user's business
+   * Update existing product within user's business with comprehensive validation
+   * Allows partial updates while maintaining data integrity and business relationships
+   * 
+   * @param {string} id - UUID of the product to update (required)
+   * @param {Object} updateData - Fields to update
+   * @param {string} updateData.name - New product name (optional, must be unique within business)
+   * @param {string} updateData.description - New product description (optional)
+   * @param {number} updateData.price - New product price (optional, must be >= 0)
+   * @param {number} updateData.quantity - New product quantity (optional, must be >= 0)
+   * @param {string} updateData.categoryId - New category ID (optional, must exist in business)
+   * @param {string} userId - UUID of the user attempting the update (required)
+   * 
+   * @returns {Object} Update result with updated product details and relationships
+   * @throws {Error} If product not found, user unauthorized, validation fails, or update fails
+   * 
+   * Business Logic:
+   * - Validates user owns the business that contains the product
+   * - Checks name uniqueness within business if name is being changed
+   * - Validates category exists and belongs to user's business if changing category
+   * - Supports partial updates (only updates provided fields)
+   * - Maintains product-business-category relationships
+   * - Returns updated product with complete relationship data
+   * 
+   * Validation Features:
+   * - Name uniqueness within business scope
+   * - Category ownership and existence validation
+   * - Price and quantity non-negative validation
+   * - Input sanitization with trimming
+   * - Atomic updates to prevent data corruption
+   * 
+   * Use Cases:
+   * - Product information updates and corrections
+   * - Pricing adjustments and inventory updates
+   * - Category reorganization and product movement
+   * - Product description and metadata updates
    */
   static async updateProduct(id, updateData, userId) {
     try {
@@ -308,7 +434,40 @@ class ProductService {
   }
 
   /**
-   * Soft delete product by setting is_available to false
+   * Soft delete product with inventory activity validation and relationship protection
+   * Prevents deletion of products with recent inventory transactions to maintain audit integrity
+   * 
+   * @param {string} id - UUID of the product to delete (required)
+   * @param {string} userId - UUID of the user attempting the deletion (required)
+   * 
+   * @returns {string} Success message confirming product deletion
+   * @throws {Error} If product not found, user unauthorized, recent inventory activity, or deletion fails
+   * 
+   * Business Logic:
+   * - Validates user owns the business that contains the product
+   * - Checks for recent inventory transactions (within 24 hours)
+   * - Performs soft deletion by setting is_available = false
+   * - Preserves product data and transaction history for audit purposes
+   * - Prevents deletion of products with active inventory management
+   * 
+   * Data Integrity Features:
+   * - Inventory transaction validation prevents audit trail corruption
+   * - Soft deletion preserves historical data and relationships
+   * - Business ownership verification ensures security
+   * - Recent activity check (24-hour window) protects active inventory
+   * 
+   * Use Cases:
+   * - Removing discontinued or obsolete products
+   * - Product catalog cleanup and organization
+   * - Inventory item retirement
+   * 
+   * Prerequisites:
+   * - Product must not have inventory transactions in the last 24 hours
+   * - User must own the business containing the product
+   * 
+   * Note: Products with recent inventory activity cannot be deleted to preserve
+   * transaction integrity and audit compliance. This prevents accidental loss
+   * of inventory management data and maintains business operation continuity.
    */
   static async deleteProduct(id, userId) {
     try {

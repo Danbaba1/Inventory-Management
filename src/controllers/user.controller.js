@@ -24,60 +24,36 @@ import UserService from "../services/user.service.js";
  * @class UserController
  */
 class UserController {
-  
+
   /**
-   * Create Admin User
-   * 
-   * Creates a new admin user in the system. This endpoint is typically used
-   * for initial system setup or by existing admins to create additional admin users.
-   * 
-   * Business Logic:
-   * - Validates required fields (name, password)
-   * - Enforces password strength requirements (min 8 characters)
-   * - Prevents duplicate admin creation
-   * - Automatically sets role to 'admin'
-   * 
-   * @static
-   * @async
-   * @param {Object} req - Express request object
-   * @param {Object} req.body - Request body
-   * @param {string} req.body.name - Admin user's full name
-   * @param {string} req.body.password - Admin password (min 8 characters)
-   * @param {Object} res - Express response object
-   * @returns {Promise<void>} JSON response with admin creation result
-   * 
-   * @example
-   * POST /api/users/create/admin
-   * {
-   *   "name": "System Administrator",
-   *   "password": "secureAdminPass123"
-   * }
-   * 
-   * Success Response (200):
-   * {
-   *   "message": "Admin created successfully",
-   *   "result": { adminUserData }
-   * }
-   * 
-   * Error Responses:
-   * - 400: Missing name/password or weak password
-   * - 409: Admin already exists
-   * - 500: Server error during creation
-   */
+ * Create Admin User
+ * 
+ * Creates a new admin user in the system. Admin must login separately after creation.
+ * 
+ * @static
+ * @async
+ * @param {Object} req - Express request object
+ * @param {Object} req.body - Request body
+ * @param {string} req.body.email - Admin user's email address
+ * @param {string} req.body.password - Admin password (min 8 characters)
+ * @param {Object} res - Express response object
+ * @returns {Promise<void>} JSON response with admin creation result
+ */
   static async createAdmin(req, res) {
     try {
-      const { name, password } = req.body;
+      const { email, password } = req.body; // Changed from name to email
 
       // Delegate business logic to service layer
-      const result = await UserService.createAdmin(name, password);
+      const result = await UserService.createAdmin(email, password);
 
-      res.status(200).json({
+      res.status(201).json({
         message: "Admin created successfully",
         result: result,
+        nextStep: "Please login using your email and password to access admin features"
       });
     } catch (err) {
       // Handle validation errors
-      if (err.message === "Please provide both name and password") {
+      if (err.message === "Please provide both email and password") {
         return res.status(400).json({
           error: "Bad Request",
           message: err.message,
@@ -91,8 +67,15 @@ class UserController {
         });
       }
 
+      if (err.message === "Please provide a valid email address") {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: err.message,
+        });
+      }
+
       // Handle business logic conflicts
-      if (err.message === "Admin already exists") {
+      if (err.message === "Admin with this email already exists") {
         return res.status(409).json({
           error: "Conflict",
           message: err.message,

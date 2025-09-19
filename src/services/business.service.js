@@ -1,12 +1,33 @@
 import { supabase } from "../config/supabase.js";
 
 /**
- * BUSINESS SERVICE - Fixed for PostgreSQL/Supabase
- * Core business logic for business entity management
+ * BUSINESS SERVICE - PostgreSQL/Supabase Implementation
+ * Core business entity management with comprehensive CRUD operations
+ * Handles business registration, retrieval, updates, and soft deletion
+ * Provides ownership verification and data validation for all operations
  */
 class BusinessService {
   /**
-   * Register a new business entity
+   * Register a new business entity with uniqueness validation
+   * Creates a business owned by the specified user with structured data storage
+   * 
+   * @param {Object} businessData - Business information object
+   * @param {string} businessData.name - Business name (required, must be unique)
+   * @param {string} businessData.type - Business type/category (required)
+   * @param {string} businessData.description - Business description (optional, defaults to empty string)
+   * @param {Object} businessData.address - Address information as JSON object (optional, defaults to empty object)
+   * @param {Object} businessData.contactInfo - Contact information as JSON object (optional, defaults to empty object)
+   * @param {string} userId - UUID of the user registering the business (required)
+   * 
+   * @returns {Object} Registration result with business details and owner information
+   * @throws {Error} If required fields missing, business name already exists, or database operation fails
+   * 
+   * Business Logic:
+   * - Validates required fields (name, type, userId)
+   * - Checks business name uniqueness across all businesses
+   * - Stores address and contact info as JSON objects for flexible structure
+   * - Sets business as active by default
+   * - Returns business data with populated owner relationship
    */
   static async registerBusiness(businessData, userId) {
     try {
@@ -67,7 +88,32 @@ class BusinessService {
   }
 
   /**
-   * Retrieve businesses with pagination and filtering
+   * Retrieve businesses with comprehensive filtering and pagination
+   * Returns paginated list of active businesses with owner details, categories, and product counts
+   * 
+   * @param {number} page - Page number for pagination (default: 1)
+   * @param {number} limit - Number of businesses per page (default: 10)
+   * @param {Object} filters - Optional filtering criteria
+   * @param {string} filters.type - Filter by business type
+   * @param {string} filters.owner - Filter by owner UUID
+   * @param {string} filters.search - Search in business name and description (case-insensitive)
+   * 
+   * @returns {Object} Paginated businesses with metadata
+   * @throws {Error} If database query fails
+   * 
+   * Returned Data Structure:
+   * - businesses: Array of business objects with:
+   *   - Basic business information (name, type, description, address, contact_info)
+   *   - owner: Owner details (name, email)
+   *   - categories: Array of associated categories
+   *   - _count: Product count for the business
+   * - pagination: Object with navigation and count information
+   * 
+   * Features:
+   * - Only returns active businesses (is_active = true)
+   * - Supports text search across name and description fields
+   * - Includes related data for comprehensive business profiles
+   * - Orders by creation date (newest first)
    */
   static async getBusinesses(page = 1, limit = 10, filters = {}) {
     try {
@@ -120,7 +166,32 @@ class BusinessService {
   }
 
   /**
-   * Update existing business with ownership verification
+   * Update existing business with ownership verification and data validation
+   * Allows partial updates with automatic data merging for complex fields
+   * 
+   * @param {string} id - UUID of the business to update (required)
+   * @param {Object} updateData - Fields to update
+   * @param {string} updateData.name - New business name (optional, must be unique if provided)
+   * @param {string} updateData.type - New business type (optional)
+   * @param {string} updateData.description - New description (optional)
+   * @param {Object} updateData.address - Address updates (optional, merged with existing)
+   * @param {Object} updateData.contactInfo - Contact info updates (optional, merged with existing)
+   * @param {string} userId - UUID of the user attempting the update (required)
+   * 
+   * @returns {Object} Update result with updated business details
+   * @throws {Error} If business not found, user unauthorized, name conflict, or update fails
+   * 
+   * Business Logic:
+   * - Validates business exists and user owns it
+   * - Checks name uniqueness if name is being changed
+   * - Merges address and contact_info objects with existing data (preserves fields not being updated)
+   * - Only updates provided fields (partial updates supported)
+   * - Returns updated business with owner relationship populated
+   * 
+   * Security Features:
+   * - Ownership verification prevents unauthorized updates
+   * - Input sanitization (trimming whitespace)
+   * - Atomic updates to prevent data corruption
    */
   static async updateBusiness(id, updateData, userId) {
     try {
@@ -194,6 +265,27 @@ class BusinessService {
 
   /**
    * Soft delete business with ownership verification
+   * Deactivates business instead of permanent deletion to preserve data integrity
+   * 
+   * @param {string} id - UUID of the business to delete (required)
+   * @param {string} userId - UUID of the user attempting the deletion (required)
+   * 
+   * @returns {string} Success message confirming deactivation
+   * @throws {Error} If business not found, user unauthorized, or deletion fails
+   * 
+   * Business Logic:
+   * - Verifies business exists and user owns it
+   * - Performs soft deletion by setting is_active = false
+   * - Preserves all business data for potential recovery
+   * - Related entities (products, categories) remain linked but inherit inactive status
+   * 
+   * Security Features:
+   * - Ownership verification prevents unauthorized deletions
+   * - Soft deletion prevents accidental data loss
+   * - Maintains referential integrity with related entities
+   * 
+   * Note: This is a soft delete operation. The business record remains in the database
+   * but is excluded from normal business listings and operations.
    */
   static async deleteBusiness(id, userId) {
     try {

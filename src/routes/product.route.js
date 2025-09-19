@@ -13,25 +13,25 @@ const productRouter = express.Router();
  * POST /product - Create a new product
  * Requires authentication
  */
-productRouter.post("/product", authenticateUser, ProductController.createProduct);
+productRouter.post("/", authenticateUser, ProductController.createProduct);
 
 /**
  * GET /products - Get all products
  * Requires authentication
  */
-productRouter.get("/products", authenticateUser, ProductController.getProducts);
+productRouter.get("/", authenticateUser, ProductController.getProducts);
 
 /**
  * PUT /product - Update product information
  * Requires authentication
  */
-productRouter.put("/product", authenticateUser, ProductController.updateProduct);
+productRouter.put("/:id", authenticateUser, ProductController.updateProduct);
 
 /**
  * DELETE /product - Delete a product
  * Requires authentication
  */
-productRouter.delete("/product", authenticateUser, ProductController.deleteProduct);
+productRouter.delete("/:id", authenticateUser, ProductController.deleteProduct);
 
 // Admin routes (commented out - ready for future implementation)
 // router.post("/admin/product", authorizeAdmin, ProductController.createProduct);

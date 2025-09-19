@@ -18,7 +18,7 @@ const userRouter = express.Router();
  * POST /create/admin - Create admin user
  * Public endpoint (likely protected by app-level security)
  */
-userRouter.post("/create/admin", UserController.createAdmin);
+userRouter.post("/create-admin", UserController.createAdmin);
 
 // User authentication routes
 /**
@@ -66,7 +66,7 @@ userRouter.post(
  * Includes email validation
  */
 userRouter.post(
-  "/forgot/password",
+  "/forgot-password",
   ValidationMiddleware.validateEmail,
   UserController.forgotPassword
 );
@@ -75,13 +75,13 @@ userRouter.post(
  * POST /reset/password - Reset user password
  * Public endpoint with token validation
  */
-userRouter.post("/reset/password", UserController.resetPassword);
+userRouter.post("/reset-password", UserController.resetPassword);
 
 // Admin protected routes
 /**
  * GET /users - Get all users
  * Requires admin authorization
  */
-userRouter.get("/users", authorizeAdmin, UserController.getUsers);
+userRouter.get("/", authorizeAdmin, UserController.getUsers);
 
 export { userRouter as UserRoutes };
