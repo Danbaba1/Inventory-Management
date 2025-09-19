@@ -24,7 +24,7 @@ router.post(
  * GET /businesses - Get all businesses
  * Public endpoint
  */
-router.get("/", BusinessController.getBusinesses);
+router.get("/", authenticateUser, BusinessController.getBusinesses);
 
 /**
  * PUT /business/:userId - Update business information

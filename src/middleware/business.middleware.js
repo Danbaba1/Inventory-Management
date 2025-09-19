@@ -27,20 +27,32 @@ export const verifyBusinessOwnership = async (req, res, next) => {
       });
     }
 
-    // Query Supabase for business with ownership and status validation
+    // Query business WITHOUT is_active filter to provide specific error messages
     const { data: business, error } = await supabase
       .from("businesses")
       .select("*")
       .eq("id", id)
-      .eq("owner_id", userId)
-      .eq("is_active", true)
       .single();
 
     // Validate business existence and ownership
     if (error || !business) {
+      return res.status(404).json({
+        error: "Not Found",
+        message: "Business not found",
+      });
+    }
+
+    if (business.owner_id !== userId) {
       return res.status(403).json({
         error: "Forbidden",
-        message: "You don't have access to this business",
+        message: "You are not authorized to access this business"
+      })
+    }
+
+    if (!business.is_active) {
+      return res.status(403).json({
+        error: "Forbidden",
+        message: "Cannot perform operations on deactivated business"
       });
     }
 

@@ -50,15 +50,50 @@ class BusinessService {
       // Check uniqueness
       const { data: existingBusiness } = await supabase
         .from("businesses")
-        .select("id")
+        .select("id, name, is_active, owner_id")
         .eq("name", name.trim())
         .single();
 
       if (existingBusiness) {
-        throw new Error("Business with this name already exists");
+        if (existingBusiness.is_active) {
+          // Active business with same name exists
+          throw new Error("Business with this name already exists");
+        } else {
+          // Check if the deactivated business belongs to the same user
+          if (existingBusiness.owner_id === userId) {
+            // User is reactivating their own deactivated business
+            const { data: reactivatedBusiness, error: reactivateError } = await supabase
+              .from("businesses")
+              .update({
+                is_active: true,
+                type: type.trim(),
+                description: description.trim(),
+                address: address,
+                contact_info: contactInfo,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", existingBusiness.id)
+              .select(`
+              *,
+              owner:owner_id(name, email)
+              `)
+              .single();
+
+            if (reactivateError) throw reactivateError;
+
+            return {
+              message: "Business reactivated successfully",
+              business: reactivatedBusiness,
+            };
+          } else {
+            // Different user trying to use name of deactivated business
+            throw new Error("Business with this name already exists");
+          }
+        }
       }
 
-      // Create business
+
+      // No existing business found, create new one
       const { data: newBusiness, error } = await supabase
         .from("businesses")
         .insert({
@@ -124,7 +159,7 @@ class BusinessService {
         .select(`
           *,
           owner:owner_id(name, email),
-          categories(id, name, description),
+          categories:categories!business_id(id, name, description),
           _count:products(count)
         `, { count: "exact" })
         .eq("is_active", true);
@@ -210,6 +245,10 @@ class BusinessService {
         throw new Error("Business does not exist");
       }
 
+      if (!business.is_active) {
+        throw new Error("Cannot update deactivated business");
+      }
+
       if (business.owner_id !== userId) {
         throw new Error("You are not authorized to update this business");
       }
@@ -222,6 +261,7 @@ class BusinessService {
           .from("businesses")
           .select("id")
           .eq("name", name.trim())
+          .eq("is_active", true)
           .neq("id", id)
           .single();
 
@@ -295,7 +335,7 @@ class BusinessService {
 
       const { data: business, error } = await supabase
         .from("businesses")
-        .select("owner_id")
+        .select("owner_id, is_active")
         .eq("id", id)
         .single();
 
@@ -303,16 +343,30 @@ class BusinessService {
         throw new Error("Business does not exist");
       }
 
+      if (!business.is_active) {
+        throw new Error("Business is already deactivated");
+      }
+
       if (business.owner_id !== userId) {
         throw new Error("You are not authorized to delete this business");
       }
+
+      await supabase
+        .from("products")
+        .update({ is_available: false })
+        .eq("business_id", id);
+
+      await supabase
+        .from("categories")
+        .update({ is_active: false })
+        .eq("business_id", id);
 
       await supabase
         .from("businesses")
         .update({ is_active: false })
         .eq("id", id);
 
-      return "Business deactivated successfully";
+      return "Business and all associated data deactivated successfully";
     } catch (err) {
       throw new Error(err.message);
     }
