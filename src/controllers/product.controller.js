@@ -36,7 +36,7 @@ import ProductService from "../services/product.service.js";
  * @requires ProductService
  */
 class ProductController {
-  
+
   /**
    * Create New Product
    * 
@@ -110,8 +110,7 @@ class ProductController {
    */
   static async createProduct(req, res) {
     try {
-      const { categoryId } = req.query;
-      const { name, quantity, price, description } = req.body;
+      const { name, quantity, price, description, categoryId } = req.body;
       const userId = req.user?.userId;
 
       // Delegate comprehensive validation and creation logic to service layer
@@ -354,13 +353,13 @@ class ProductController {
    */
   static async updateProduct(req, res) {
     try {
-      const { id } = req.query;
+      const { id } = req.params;
       const updateData = req.body;
       const userId = req.user?.userId;
 
       // Service handles validation, authorization, and complex update logic
       const result = await ProductService.updateProduct(id, updateData, userId);
-      
+
       res.status(200).json({
         message: "Product updated successfully",
         result: result,
@@ -430,7 +429,7 @@ class ProductController {
    * @static
    * @async
    * @param {Object} req - Express request object
-   * @param {Object} req.query - Query parameters
+   * @param {Object} req.params - Query parameters
    * @param {string} req.query.id - Product ID to delete (required)
    * @param {Object} req.user - Authenticated user from JWT middleware
    * @param {string} req.user.userId - User ID for ownership verification
@@ -460,7 +459,7 @@ class ProductController {
    */
   static async deleteProduct(req, res) {
     try {
-      const { id } = req.query;
+      const { id } = req.params;
       const userId = req.user?.userId;
 
       // Service handles validation, authorization, and cascading deletions
