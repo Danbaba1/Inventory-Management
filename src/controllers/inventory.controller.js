@@ -347,10 +347,8 @@ class InventoryController {
         endDate,
       });
 
-      res.status(200).json({
-        message: "Inventory history retrieved successfully",
-        ...history,
-      });
+      res.status(200).json(
+        history);
     } catch (err) {
       console.error("Error getting inventory history:", err);
       res.status(500).json({
@@ -474,10 +472,7 @@ class InventoryController {
         categoryId,
       });
 
-      res.status(200).json({
-        message: "Business inventory history retrieved successfully",
-        ...history,
-      });
+      res.status(200).json(history);
     } catch (err) {
       if (
         err.message.includes("not found") ||

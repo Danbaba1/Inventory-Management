@@ -221,10 +221,8 @@ class BusinessController {
       // Service handles filtering, pagination, and data aggregation
       const result = await BusinessService.getBusinesses(page, limit, filters);
 
-      res.status(200).json({
-        message: "Businesses retrieved successfully",
-        ...result,
-      });
+      res.status(200).json(
+        result);
     } catch (err) {
       console.error("Error getting businesses", err);
       res.status(500).json({

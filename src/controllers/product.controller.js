@@ -252,10 +252,8 @@ class ProductController {
       // Service handles business verification and data retrieval with joins
       const result = await ProductService.getProducts(page, limit, userId);
 
-      res.status(200).json({
-        message: "Products retrieved successfully",
-        ...result,
-      });
+      res.status(200).json(result
+      );
     } catch (err) {
       // Handle business logic errors
       if (

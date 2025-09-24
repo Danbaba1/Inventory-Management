@@ -223,7 +223,16 @@ class ProductService {
 
       if (error) throw error;
 
+      // Determine appropriate message based on results
+      let message;
+      if (!products || products.length === 0) {
+        message = "No products to display";
+      } else {
+        message = "Products retrieved successfully";
+      }
+
       return {
+        message,
         products,
         pagination: {
           currentPage: page,
@@ -506,8 +515,25 @@ class ProductService {
         .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
 
       if (count > 0) {
-        throw new Error("Cannot delete product with recent inventory activity. Please try again later.");
+        // Use pendingTransactions to provide more detailed error information
+        const transactionTypes = pendingTransactions.map(t => t.transaction_type).join(', ');
+        const totalQuantity = pendingTransactions.reduce((sum, t) => sum + t.quantity, 0);
+
+        console.log(`Deletion blocked - Found ${count} recent transactions:`, {
+          productId: id,
+          transactionTypes,
+          totalQuantity,
+          transactions: pendingTransactions
+        });
+
+        throw new Error(
+          `Cannot delete product with ${count} recent inventory transaction(s) (${transactionTypes}). ` +
+          `Total quantity affected: ${totalQuantity}. Please try again later.`
+        );
       }
+
+      // Log successful deletion attempt (no recent transactions found)
+      console.log(`Product deletion approved - no recent transactions found for product ${id}`);
 
       // Soft delete
       await supabase

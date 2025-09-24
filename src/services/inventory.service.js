@@ -4,25 +4,12 @@ import { supabase } from "../config/supabase.js";
  * INVENTORY SERVICE - PostgreSQL/Supabase Implementation
  * Manages product inventory with complete audit trail using stored procedures
  * Provides atomic operations for inventory management with business authorization
+ * FIXED: Now filters out products from deleted categories in history queries
  */
 class InventoryService {
   /**
    * Increment product quantity with audit logging
    * Creates a TOP_UP transaction using atomic stored procedure
-   * 
-   * @param {string} productId - UUID of the product to increment
-   * @param {number} quantity - Amount to add (must be > 0)
-   * @param {string} userId - UUID of the user performing the operation
-   * @param {string|null} reason - Optional reason for the increment (defaults to "Stock replenishment")
-   * @param {string|null} referenceId - Optional UUID for linking to other transactions
-   * 
-   * @returns {Object} Result object with transaction details
-   * @throws {Error} If validation fails, product not found, or user unauthorized
-   * 
-   * Business Logic:
-   * - Validates user owns the business that owns the product
-   * - Uses stored procedure for atomic quantity update and transaction logging
-   * - Returns old/new quantities and transaction metadata
    */
   static async incrementQuantity(
     productId,
@@ -46,7 +33,8 @@ class InventoryService {
         .select(
           `
           *,
-          business:business_id(id, name, owner_id)
+          business:business_id(id, name, owner_id),
+          category:category_id(id, name, description, is_active)
         `
         )
         .eq("id", productId)
@@ -54,6 +42,11 @@ class InventoryService {
 
       if (error || !product) {
         throw new Error("Product not found");
+      }
+
+      // Check if category is deleted
+      if (!product.category || !product.category.is_active) {
+        throw new Error("Cannot modify product - category has been deleted");
       }
 
       // Verify user owns the business
@@ -102,21 +95,6 @@ class InventoryService {
   /**
    * Decrement product quantity with stock validation and audit logging
    * Creates a USAGE transaction using atomic stored procedure
-   * 
-   * @param {string} productId - UUID of the product to decrement
-   * @param {number} quantity - Amount to remove (must be > 0)
-   * @param {string} userId - UUID of the user performing the operation
-   * @param {string|null} reason - Optional reason for the decrement (defaults to "Stock usage")
-   * @param {string|null} referenceId - Optional UUID for linking to other transactions
-   * 
-   * @returns {Object} Result object with transaction details
-   * @throws {Error} If validation fails, insufficient stock, product not found, or user unauthorized
-   * 
-   * Business Logic:
-   * - Validates user owns the business that owns the product
-   * - Checks sufficient stock before attempting decrement
-   * - Uses stored procedure for atomic quantity update and transaction logging
-   * - Prevents negative inventory levels
    */
   static async decrementQuantity(
     productId,
@@ -140,7 +118,8 @@ class InventoryService {
         .select(
           `
           *,
-          business:business_id(id, name, owner_id)
+          business:business_id(id, name, owner_id),
+          category:category_id(id, name, description, is_active)
         `
         )
         .eq("id", productId)
@@ -148,6 +127,11 @@ class InventoryService {
 
       if (error || !product) {
         throw new Error("Product not found");
+      }
+
+      // Check if category is deleted
+      if (!product.category || !product.category.is_active) {
+        throw new Error("Cannot modify product - category has been deleted");
       }
 
       // Verify user owns the business
@@ -201,23 +185,7 @@ class InventoryService {
 
   /**
    * Get complete inventory transaction history for a specific product
-   * Returns paginated results with optional filtering capabilities
-   * 
-   * @param {string} productId - UUID of the product (required)
-   * @param {Object} options - Filtering and pagination options
-   * @param {number} options.page - Page number (default: 1)
-   * @param {number} options.limit - Items per page (default: 10)
-   * @param {string} options.userId - Filter by user who performed transactions
-   * @param {string} options.transactionType - Filter by 'TOP_UP' or 'USAGE'
-   * @param {string} options.startDate - Start date filter (ISO format)
-   * @param {string} options.endDate - End date filter (ISO format)
-   * 
-   * @returns {Object} Paginated transactions with product, user, and business details
-   * @throws {Error} If productId is missing or query fails
-   * 
-   * Returned Data Structure:
-   * - transactions: Array of transaction records with related data
-   * - pagination: Object with currentPage, totalPages, totalRecords, navigation flags
+   * FIXED: Now filters out transactions for products in deleted categories
    */
   static async getProductInventoryHistory(productId, options = {}) {
     try {
@@ -236,17 +204,50 @@ class InventoryService {
 
       const offset = (page - 1) * limit;
 
+      // First, check if the product's category is active
+      const { data: productCheck, error: productError } = await supabase
+        .from("products")
+        .select(`
+          id,
+          category:category_id(is_active)
+        `)
+        .eq("id", productId)
+        .single();
+
+      if (productError || !productCheck) {
+        throw new Error("Product not found");
+      }
+
+      // If category is deleted, return empty results
+      if (!productCheck.category || !productCheck.category.is_active) {
+        return {
+          message: "No product inventory history to display - category has been deleted",
+          transactions: [],
+          pagination: {
+            currentPage: page,
+            totalPages: 0,
+            totalRecords: 0,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        };
+      }
+
       let query = supabase
         .from("inventory_transactions")
         .select(
           `
           *,
-          product:product_id(name,
-           description,
-           category:category_id(
-           id,
-           name,
-           description)),
+          product:product_id(
+            name,
+            description,
+            category:category_id(
+              id,
+              name,
+              description,
+              is_active
+            )
+          ),
           user:user_id(name, email),
           business:business_id(name, type)
         `,
@@ -280,13 +281,29 @@ class InventoryService {
 
       if (error) throw error;
 
+      // Filter out transactions where category is inactive (additional safety check)
+      const filteredTransactions = transactions?.filter(
+        transaction => 
+          transaction.product && 
+          transaction.product.category && 
+          transaction.product.category.is_active
+      ) || [];
+
+      let message;
+      if (!filteredTransactions || filteredTransactions.length === 0) {
+        message = "No product inventory history to display";
+      } else {
+        message = "Product inventory history retrieved successfully";
+      }
+
       return {
-        transactions,
+        message,
+        transactions: filteredTransactions,
         pagination: {
           currentPage: page,
-          totalPages: Math.ceil((count || 0) / limit),
-          totalRecords: count || 0,
-          hasNextPage: page < Math.ceil((count || 0) / limit),
+          totalPages: Math.ceil((filteredTransactions.length || 0) / limit),
+          totalRecords: filteredTransactions.length || 0,
+          hasNextPage: page < Math.ceil((filteredTransactions.length || 0) / limit),
           hasPrevPage: page > 1,
         },
       };
@@ -297,34 +314,7 @@ class InventoryService {
 
   /**
    * Get comprehensive inventory history for all products in a business
-   * Returns data organized by categories with nested product transactions
-   * 
-   * @param {Object} options - Filtering and pagination options
-   * @param {string} options.userId - UUID of the business owner (required)
-   * @param {number} options.page - Page number (default: 1)
-   * @param {number} options.limit - Items per page (default: 10)
-   * @param {string} options.transactionType - Filter by 'TOP_UP' or 'USAGE'
-   * @param {string} options.startDate - Start date filter (ISO format)
-   * @param {string} options.endDate - End date filter (ISO format)
-   * @param {string} options.categoryId - Filter by specific category UUID
-   * 
-   * @returns {Object} Business inventory data organized by categories
-   * @throws {Error} If userId is missing or user has no active business
-   * 
-   * Returned Data Structure:
-   * - business: Business information (id, name, type)
-   * - categories: Array of category objects containing:
-   *   - Category details (id, name, description)
-   *   - products: Array of products in the category with their transactions
-   *   - totalTransactions: Count of transactions in this category
-   * - totalTransactions: Total count across all categories
-   * - pagination: Standard pagination object
-   * 
-   * Business Logic:
-   * - Validates user owns an active business
-   * - Groups transactions by product categories for organized reporting
-   * - Supports category-specific filtering
-   * - Includes current product quantities alongside historical data
+   * FIXED: Now filters out transactions for products in deleted categories
    */
   static async getBusinessInventoryHistory(options = {}) {
     try {
@@ -379,7 +369,8 @@ class InventoryService {
           category:category_id(
             id,
             name,
-            description
+            description,
+            is_active
           )
         ),
         user:user_id(
@@ -405,9 +396,34 @@ class InventoryService {
         query = query.lte("created_at", new Date(endDate).toISOString());
       }
 
-      // Filter by category if specified
+      // Filter by category if specified (and category is active)
       if (categoryId) {
-        // First get products in the category
+        // First verify the category exists and is active
+        const { data: categoryCheck, error: categoryError } = await supabase
+          .from("categories")
+          .select("id, is_active")
+          .eq("id", categoryId)
+          .eq("business_id", userBusiness.id)
+          .single();
+
+        if (categoryError || !categoryCheck || !categoryCheck.is_active) {
+          // Category doesn't exist or is deleted
+          return {
+            message: "No business inventory history to display - category not found or deleted",
+            business: userBusiness,
+            categories: [],
+            totalTransactions: 0,
+            pagination: {
+              currentPage: page,
+              totalPages: 0,
+              totalRecords: 0,
+              hasNextPage: false,
+              hasPrevPage: false,
+            },
+          };
+        }
+
+        // Get products in the active category
         const { data: categoryProducts } = await supabase
           .from("products")
           .select("id")
@@ -420,6 +436,7 @@ class InventoryService {
         } else {
           // No products in this category
           return {
+            message: "No business inventory history to display",
             business: userBusiness,
             categories: [],
             totalTransactions: 0,
@@ -444,11 +461,26 @@ class InventoryService {
 
       if (error) throw error;
 
-      // Group transactions by category
+      // Filter out transactions where category is inactive
+      const activeTransactions = transactions?.filter(
+        transaction => 
+          transaction.product && 
+          transaction.product.category && 
+          transaction.product.category.is_active
+      ) || [];
+
+      let message;
+      if (!activeTransactions || activeTransactions.length === 0) {
+        message = "No business inventory history to display";
+      } else {
+        message = "Business inventory history retrieved successfully";
+      }
+
+      // Group transactions by category (only active categories)
       const categoriesMap = new Map();
 
-      transactions?.forEach((transaction) => {
-        if (!transaction.product || !transaction.product.category) return;
+      activeTransactions?.forEach((transaction) => {
+        if (!transaction.product || !transaction.product.category || !transaction.product.category.is_active) return;
 
         const category = transaction.product.category;
         const categoryKey = category.id;
@@ -500,14 +532,15 @@ class InventoryService {
       }));
 
       return {
+        message,
         business: userBusiness,
         categories,
-        totalTransactions: count || 0,
+        totalTransactions: activeTransactions.length || 0,
         pagination: {
           currentPage: page,
-          totalPages: Math.ceil((count || 0) / limit),
-          totalRecords: count || 0,
-          hasNextPage: page < Math.ceil((count || 0) / limit),
+          totalPages: Math.ceil((activeTransactions.length || 0) / limit),
+          totalRecords: activeTransactions.length || 0,
+          hasNextPage: page < Math.ceil((activeTransactions.length || 0) / limit),
           hasPrevPage: page > 1,
         },
       };

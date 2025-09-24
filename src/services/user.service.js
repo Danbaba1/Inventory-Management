@@ -853,7 +853,16 @@ class UserService {
 
       if (error) throw error;
 
+      // Determine appropriate message based on results
+      let message;
+      if (!users || users.length === 0) {
+        message = "No users to display";
+      } else {
+        message = "Users retrieved successfully";
+      }
+
       return {
+        message,
         users,
         pagination: {
           currentPage: page,

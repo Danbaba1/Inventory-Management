@@ -736,10 +736,7 @@ class UserController {
       // Service handles data retrieval and pagination
       const result = await UserService.getUsers(page, limit);
 
-      res.status(200).json({
-        message: "Users retrieved successfully",
-        ...result,
-      });
+      res.status(200).json(result);
     } catch (err) {
       console.error("Error getting users", err);
       res.status(500).json({
