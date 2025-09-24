@@ -33,7 +33,7 @@ import CategoryService from "../services/category.service.js";
  * @requires CategoryService
  */
 class CategoryController {
-  
+
   /**
    * Create New Category
    * 
@@ -219,10 +219,9 @@ class CategoryController {
       // Service handles business ownership verification and data retrieval
       const result = await CategoryService.getCategories(page, limit, userId);
 
-      res.status(200).json({
-        message: "Categories retrieved successfully",
-        ...result,
-      });
+      res.status(200).json(
+        result
+      );
     } catch (err) {
       // Handle business logic errors
       if (
@@ -306,7 +305,7 @@ class CategoryController {
    */
   static async updateCategory(req, res) {
     try {
-      const { id } = req.query;
+      const { id } = req.params;
       const { name, description } = req.body;
       const userId = req.user?.userId;
 
@@ -400,12 +399,12 @@ class CategoryController {
    */
   static async deleteCategory(req, res) {
     try {
-      const { id } = req.query;
+      const { id } = req.params;
       const userId = req.user?.userId;
 
       // Service handles authorization, cascading deletion, and cleanup
       const result = await CategoryService.deleteCategory(id, userId);
-      
+
       res.status(200).json({
         message: result,
       });

@@ -58,6 +58,7 @@ class CategoryService {
         .select("id")
         .eq("name", name.trim())
         .eq("business_id", userBusiness.id)
+        .eq("is_active", true)
         .single();
 
       if (existingCategory) {
@@ -145,7 +146,7 @@ class CategoryService {
         .select(`
           *,
           business:business_id(name, type),
-          products(id, name, description, is_available)
+          products(id, name, description, price, quantity, is_available)
         `, { count: "exact" })
         .eq("business_id", userBusiness.id)
         .eq("is_active", true)
@@ -154,8 +155,23 @@ class CategoryService {
 
       if (error) throw error;
 
+      // Filter out inactive products from categories
+      const filteredCategories = categories?.map(category => ({
+        ...category,
+        products: category.products?.filter(product => product.is_available !== false) || []
+      })) || [];
+
+      // Determine appropriate message based on results
+      let message;
+      if (!categories || categories.length === 0) {
+        message = "No categories to display";
+      } else {
+        message = "Categories retrieved successfully";
+      }
+
       return {
-        categories,
+        message,
+        categories: filteredCategories,
         pagination: {
           currentPage: page,
           totalPages: Math.ceil((count || 0) / limit),
@@ -221,6 +237,7 @@ class CategoryService {
         .select("*")
         .eq("id", id)
         .eq("business_id", userBusiness.id)
+        .eq("is_active", true)
         .single();
 
       if (error || !category) {
@@ -338,8 +355,31 @@ class CategoryService {
         .eq("is_available", true);
 
       if (count > 0) {
-        throw new Error(`Cannot delete category. It contains ${count} products. Please move or delete the products first.`);
+        // Use productsInCategory to provide detailed information
+        const productNames = productsInCategory.map(p => p.name).join(', ');
+        const totalValue = productsInCategory.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+
+        console.log(`Category deletion blocked - Contains ${count} products:`, {
+          categoryId: id,
+          productCount: count,
+          products: productsInCategory.map(p => ({ id: p.id, name: p.name, value: p.price * p.quantity })),
+          totalInventoryValue: totalValue
+        });
+
+        // Create a more informative error message
+        const truncatedNames = productNames.length > 100
+          ? productNames.substring(0, 100) + '...'
+          : productNames;
+
+        throw new Error(
+          `Cannot delete category. It contains ${count} products (${truncatedNames}). ` +
+          `Total inventory value: $${totalValue.toFixed(2)}. ` +
+          `Please move or delete the products first.`
+        );
       }
+
+      // Log successful deletion attempt (no products found)
+      console.log(`Category deletion approved - no active products found in category ${id}`);
 
       // Soft delete
       await supabase

@@ -27,7 +27,7 @@ import BusinessService from "../services/business.service.js";
  * @requires BusinessService
  */
 class BusinessController {
-  
+
   /**
    * Register New Business
    * 
@@ -206,19 +206,23 @@ class BusinessController {
         });
       }
 
+      const userId = req.user?.userId;
+
       // Build filter object from query parameters
-      const filters = {};
+      // Automatically add owner filter for the authenticated user
+      const filters = {
+        owner: userId,
+      };
+
+      // Add optional filters
       if (req.query.type) filters.type = req.query.type;
-      if (req.query.owner) filters.owner = req.query.owner;
       if (req.query.search) filters.search = req.query.search;
 
       // Service handles filtering, pagination, and data aggregation
       const result = await BusinessService.getBusinesses(page, limit, filters);
 
-      res.status(200).json({
-        message: "Businesses retrieved successfully",
-        ...result,
-      });
+      res.status(200).json(
+        result);
     } catch (err) {
       console.error("Error getting businesses", err);
       res.status(500).json({
@@ -292,8 +296,9 @@ class BusinessController {
    */
   static async updateBusiness(req, res) {
     try {
-      const { id, userId } = req.query;
-      
+      const { id } = req.params;
+      const userId = req.user?.userId;
+
       // Build update object, filtering out undefined values
       const updateData = {
         name: req.body.name,
@@ -404,7 +409,7 @@ class BusinessController {
     try {
       // Extract business ID from URL parameters
       const { id } = req.params;
-      
+
       // Get authenticated user ID
       const userId = req.user?.userId;
 

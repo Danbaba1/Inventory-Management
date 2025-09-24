@@ -8,27 +8,27 @@ import { supabase } from "../config/supabase.js";
  */
 class BusinessService {
   /**
-   * Register a new business entity with uniqueness validation
-   * Creates a business owned by the specified user with structured data storage
-   * 
-   * @param {Object} businessData - Business information object
-   * @param {string} businessData.name - Business name (required, must be unique)
-   * @param {string} businessData.type - Business type/category (required)
-   * @param {string} businessData.description - Business description (optional, defaults to empty string)
-   * @param {Object} businessData.address - Address information as JSON object (optional, defaults to empty object)
-   * @param {Object} businessData.contactInfo - Contact information as JSON object (optional, defaults to empty object)
-   * @param {string} userId - UUID of the user registering the business (required)
-   * 
-   * @returns {Object} Registration result with business details and owner information
-   * @throws {Error} If required fields missing, business name already exists, or database operation fails
-   * 
-   * Business Logic:
-   * - Validates required fields (name, type, userId)
-   * - Checks business name uniqueness across all businesses
-   * - Stores address and contact info as JSON objects for flexible structure
-   * - Sets business as active by default
-   * - Returns business data with populated owner relationship
-   */
+ * Register a new business entity with uniqueness validation
+ * Creates a business owned by the specified user with structured data storage
+ * 
+ * @param {Object} businessData - Business information object
+ * @param {string} businessData.name - Business name (required, must be unique)
+ * @param {string} businessData.type - Business type/category (required)
+ * @param {string} businessData.description - Business description (optional, defaults to empty string)
+ * @param {Object} businessData.address - Address information as JSON object (optional, defaults to empty object)
+ * @param {Object} businessData.contactInfo - Contact information as JSON object (optional, defaults to empty object)
+ * @param {string} userId - UUID of the user registering the business (required)
+ * 
+ * @returns {Object} Registration result with business details and owner information
+ * @throws {Error} If required fields missing, business name already exists, or database operation fails
+ * 
+ * Business Logic:
+ * - Validates required fields (name, type, userId)
+ * - Checks business name uniqueness across ALL businesses (active and inactive)
+ * - Stores address and contact info as JSON objects for flexible structure
+ * - Sets business as active by default
+ * - Returns business data with populated owner relationship
+ */
   static async registerBusiness(businessData, userId) {
     try {
       const {
@@ -39,6 +39,7 @@ class BusinessService {
         contactInfo = {},
       } = businessData;
 
+      // Validate required fields
       if (!name || !type) {
         throw new Error("Please provide both name and type");
       }
@@ -47,18 +48,20 @@ class BusinessService {
         throw new Error("User ID is required to register a business");
       }
 
-      // Check uniqueness
+      // Check for business name uniqueness across ALL businesses
+      // This prevents conflicts with both active and inactive businesses
       const { data: existingBusiness } = await supabase
         .from("businesses")
-        .select("id")
+        .select("id, name")
         .eq("name", name.trim())
+        .eq("is_active", true)
         .single();
 
       if (existingBusiness) {
         throw new Error("Business with this name already exists");
       }
 
-      // Create business
+      // Create new business
       const { data: newBusiness, error } = await supabase
         .from("businesses")
         .insert({
@@ -71,9 +74,9 @@ class BusinessService {
           is_active: true,
         })
         .select(`
-          *,
-          owner:owner_id(name, email)
-        `)
+        *,
+        owner:owner_id(name, email)
+      `)
         .single();
 
       if (error) throw error;
@@ -122,11 +125,10 @@ class BusinessService {
       let query = supabase
         .from("businesses")
         .select(`
-          *,
-          owner:owner_id(name, email),
-          categories(id, name, description),
-          _count:products(count)
-        `, { count: "exact" })
+        *,
+        owner:owner_id(name, email),
+        categories:categories!business_id(id, name, description, is_active)
+      `, { count: "exact" })
         .eq("is_active", true);
 
       // Apply filters
@@ -148,10 +150,48 @@ class BusinessService {
 
       if (error) throw error;
 
+      // Filter out inactive categories and fetch products for each active category
+      const filteredBusinesses = await Promise.all(
+        businesses?.map(async (business) => {
+          // Filter active categories
+          const activeCategories = business.categories?.filter(category => category.is_active !== false) || [];
+
+          // Fetch products for each active category
+          const categoriesWithProducts = await Promise.all(
+            activeCategories.map(async (category) => {
+              const { data: products } = await supabase
+                .from("products")
+                .select("id, name, description, price, quantity, is_available")
+                .eq("category_id", category.id)
+                .eq("is_available", true);
+
+              return {
+                ...category,
+                products: products || []
+              };
+            })
+          );
+
+          return {
+            ...business,
+            categories: categoriesWithProducts
+          };
+        }) || []
+      );
+
       const totalPages = Math.ceil((count || 0) / limit);
 
+      // Determine appropriate message based on results
+      let message;
+      if (!businesses || businesses.length === 0) {
+        message = "No businesses to display";
+      } else {
+        message = "Businesses retrieved successfully";
+      }
+
       return {
-        businesses,
+        message,
+        businesses: filteredBusinesses,
         pagination: {
           currentPage: page,
           totalPages,
@@ -210,6 +250,10 @@ class BusinessService {
         throw new Error("Business does not exist");
       }
 
+      if (!business.is_active) {
+        throw new Error("Cannot update deactivated business");
+      }
+
       if (business.owner_id !== userId) {
         throw new Error("You are not authorized to update this business");
       }
@@ -222,6 +266,7 @@ class BusinessService {
           .from("businesses")
           .select("id")
           .eq("name", name.trim())
+          .eq("is_active", true)
           .neq("id", id)
           .single();
 
@@ -295,7 +340,7 @@ class BusinessService {
 
       const { data: business, error } = await supabase
         .from("businesses")
-        .select("owner_id")
+        .select("owner_id, is_active")
         .eq("id", id)
         .single();
 
@@ -303,16 +348,30 @@ class BusinessService {
         throw new Error("Business does not exist");
       }
 
+      if (!business.is_active) {
+        throw new Error("Business is already deactivated");
+      }
+
       if (business.owner_id !== userId) {
         throw new Error("You are not authorized to delete this business");
       }
+
+      await supabase
+        .from("products")
+        .update({ is_available: false })
+        .eq("business_id", id);
+
+      await supabase
+        .from("categories")
+        .update({ is_active: false })
+        .eq("business_id", id);
 
       await supabase
         .from("businesses")
         .update({ is_active: false })
         .eq("id", id);
 
-      return "Business deactivated successfully";
+      return "Business and all associated data deactivated successfully";
     } catch (err) {
       throw new Error(err.message);
     }
