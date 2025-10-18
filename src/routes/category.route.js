@@ -182,7 +182,7 @@ router.get("/", authenticateUser, CategoryController.getCategories);
 /**
  * @swagger
  * /api/categories/{id}:
- *   put:
+ *   patch:
  *     summary: Update a category
  *     tags: [Categories]
  *     security:
@@ -230,7 +230,7 @@ router.get("/", authenticateUser, CategoryController.getCategories);
  *       404:
  *         description: Category does not exist
  */
-router.put("/:id", authenticateUser, CategoryController.updateCategory);
+router.patch("/:id", authenticateUser, CategoryController.updateCategory);
 
 /**
  * @swagger

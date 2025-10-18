@@ -11,45 +11,6 @@ const productRouter = express.Router();
  *   description: Product management endpoints
  */
 
-// /**
-//  * @swagger
-//  * components:
-//  *   securitySchemes:
-//  *     bearerAuth:
-//  *       type: http
-//  *       scheme: bearer
-//  *       bearerFormat: JWT
-//  *   schemas:
-//  *     Product:
-//  *       type: object
-//  *       required:
-//  *         - name
-//  *         - price
-//  *         - categoryId
-//  *       properties:
-//  *         id:
-//  *           type: string
-//  *           description: Auto-generated product ID
-//  *         name:
-//  *           type: string
-//  *           description: Product name
-//  *         description:
-//  *           type: string
-//  *           description: Product description
-//  *         price:
-//  *           type: number
-//  *           description: Product price
-//  *         categoryId:
-//  *           type: string
-//  *           description: Category ID the product belongs to
-//  *         createdAt:
-//  *           type: string
-//  *           format: date-time
-//  *         updatedAt:
-//  *           type: string
-//  *           format: date-time
-//  */
-
 /**
  * @swagger
  * /api/product:
@@ -151,7 +112,7 @@ productRouter.get("/", authenticateUser, ProductController.getProducts);
 /**
  * @swagger
  * /api/product/{id}:
- *   put:
+ *   patch:
  *     summary: Update a product
  *     tags: [Products]
  *     security:
@@ -194,7 +155,7 @@ productRouter.get("/", authenticateUser, ProductController.getProducts);
  *       500:
  *         description: Server error
  */
-productRouter.put("/:id", authenticateUser, ProductController.updateProduct);
+productRouter.patch("/:id", authenticateUser, ProductController.updateProduct);
 
 /**
  * @swagger

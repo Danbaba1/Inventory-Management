@@ -163,7 +163,7 @@ router.get("/", authenticateUser, BusinessController.getBusinesses);
 /**
  * @swagger
  * /api/businesses/{id}:
- *   put:
+ *   patch:
  *     summary: Update business information
  *     description: Update details of a specific business (owner only)
  *     tags: [Business]
@@ -223,7 +223,7 @@ router.get("/", authenticateUser, BusinessController.getBusinesses);
  *       500:
  *         description: Server error
  */
-router.put(
+router.patch(
   "/:id",
   authenticateUser,
   verifyBusinessOwnership,
