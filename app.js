@@ -1,5 +1,7 @@
 import express from "express";
 import cors from 'cors';
+import swaggerJSDoc from "swagger-jsdoc";
+import { serve, setup } from "swagger-ui-express";
 import { UserRoutes } from "./src/routes/user.route.js";
 import { ProductRoutes } from "./src/routes/product.route.js";
 import { CategoryRoutes } from "./src/routes/category.route.js";
@@ -11,6 +13,37 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'Inventory Management API',
+            version: '1.0.0',
+            description: 'Comprehensive API for managing businesses, products, categories, and inventory',
+        },
+        servers: [
+            {
+                url: 'http://localhost:3000',
+                description: 'Development server',
+            },
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT',
+                },
+            },
+        },
+    },
+    apis: ['./src/routes/*.js'],
+};
+
+const swaggerSpec = swaggerJSDoc(swaggerOptions);
+
+app.use("/api-docs", serve, setup(swaggerSpec));
 
 app.use("/api/users", UserRoutes);
 app.use("/api/products", ProductRoutes);
