@@ -5,38 +5,230 @@ import { authenticateUser } from "../middleware/auth.middleware.js";
 const productRouter = express.Router();
 
 /**
- * Product Management Routes
- * Controllers handle the business logic - see ProductController for detailed implementation
+ * @swagger
+ * tags:
+ *   name: Products
+ *   description: Product management endpoints
  */
 
+// /**
+//  * @swagger
+//  * components:
+//  *   securitySchemes:
+//  *     bearerAuth:
+//  *       type: http
+//  *       scheme: bearer
+//  *       bearerFormat: JWT
+//  *   schemas:
+//  *     Product:
+//  *       type: object
+//  *       required:
+//  *         - name
+//  *         - price
+//  *         - categoryId
+//  *       properties:
+//  *         id:
+//  *           type: string
+//  *           description: Auto-generated product ID
+//  *         name:
+//  *           type: string
+//  *           description: Product name
+//  *         description:
+//  *           type: string
+//  *           description: Product description
+//  *         price:
+//  *           type: number
+//  *           description: Product price
+//  *         categoryId:
+//  *           type: string
+//  *           description: Category ID the product belongs to
+//  *         createdAt:
+//  *           type: string
+//  *           format: date-time
+//  *         updatedAt:
+//  *           type: string
+//  *           format: date-time
+//  */
+
 /**
- * POST /product - Create a new product
- * Requires authentication
+ * @swagger
+ * /api/product:
+ *   post:
+ *     summary: Create a new product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - price
+ *               - categoryId
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Product name
+ *               description:
+ *                 type: string
+ *                 description: Product description
+ *               price:
+ *                 type: number
+ *                 description: Product price
+ *               categoryId:
+ *                 type: string
+ *                 description: Category ID
+ *     responses:
+ *       201:
+ *         description: Product created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Product'
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 productRouter.post("/", authenticateUser, ProductController.createProduct);
 
 /**
- * GET /products - Get all products
- * Requires authentication
+ * @swagger
+ * /api/product:
+ *   get:
+ *     summary: Get all products
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: categoryId
+ *         schema:
+ *           type: string
+ *         description: Filter by category ID
+ *     responses:
+ *       200:
+ *         description: List of products retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 products:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Product'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 productRouter.get("/", authenticateUser, ProductController.getProducts);
 
 /**
- * PUT /product - Update product information
- * Requires authentication
+ * @swagger
+ * /api/product/{id}:
+ *   put:
+ *     summary: Update a product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Product ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               price:
+ *                 type: number
+ *               categoryId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Product updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Product'
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Server error
  */
 productRouter.put("/:id", authenticateUser, ProductController.updateProduct);
 
 /**
- * DELETE /product - Delete a product
- * Requires authentication
+ * @swagger
+ * /api/product/{id}:
+ *   delete:
+ *     summary: Delete a product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Product ID
+ *     responses:
+ *       200:
+ *         description: Product deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Product deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Server error
  */
 productRouter.delete("/:id", authenticateUser, ProductController.deleteProduct);
-
-// Admin routes (commented out - ready for future implementation)
-// router.post("/admin/product", authorizeAdmin, ProductController.createProduct);
-// router.get("/admin/products", authorizeAdmin, ProductController.getProducts);
-// router.put("/admin/product", authorizeAdmin, ProductController.updateProduct);
-// router.delete("/admin/product", authorizeAdmin, ProductController.deleteProduct);
 
 export { productRouter as ProductRoutes };
