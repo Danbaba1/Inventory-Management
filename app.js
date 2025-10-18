@@ -8,6 +8,10 @@ import { CategoryRoutes } from "./src/routes/category.route.js";
 import { InventoryRoutes } from "./src/routes/inventory.route.js";
 import { BusinessRoutes } from "./src/routes/business.route.js";
 
+import dotenv from "dotenv";
+
+dotenv.config();
+
 const app = express();
 
 app.use(cors());
@@ -24,8 +28,8 @@ const swaggerOptions = {
         },
         servers: [
             {
-                url: 'http://localhost:3000',
-                description: 'Development server',
+                url: process.env.API_URL || 'http://localhost:3000',
+                description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server',
             },
         ],
         components: {
