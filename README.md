@@ -309,7 +309,7 @@ The system uses stored procedures for atomic inventory operations:
 | ------ | -------------------------- | ----------------- | ------------- |
 | POST   | `/api/businesses/register` | Register business | User          |
 | GET    | `/api/businesses`          | Get businesses    | User          |
-| PUT    | `/api/businesses/:id`      | Update business   | Owner         |
+| PATCH  | `/api/businesses/:id`      | Update business   | Owner         |
 | DELETE | `/api/businesses/:id`      | Delete business   | Owner         |
 
 ### Category Management
@@ -318,7 +318,7 @@ The system uses stored procedures for atomic inventory operations:
 | ------ | --------------------- | --------------- | -------------- |
 | POST   | `/api/categories`     | Create category | Business Owner |
 | GET    | `/api/categories`     | Get categories  | Business Owner |
-| PUT    | `/api/categories/:id` | Update category | Business Owner |
+| PATCH  | `/api/categories/:id` | Update category | Business Owner |
 | DELETE | `/api/categories/:id` | Delete category | Business Owner |
 
 ### Product Management
@@ -328,7 +328,7 @@ The system uses stored procedures for atomic inventory operations:
 | POST   | `/api/products`     | Create product     | Business Owner |
 | GET    | `/api/products`     | Get products       | Business Owner |
 | GET    | `/api/products/:id` | Get single product | Business Owner |
-| PUT    | `/api/products/:id` | Update product     | Business Owner |
+| PATCH  | `/api/products/:id` | Update product     | Business Owner |
 | DELETE | `/api/products/:id` | Delete product     | Business Owner |
 
 ### Inventory Management
