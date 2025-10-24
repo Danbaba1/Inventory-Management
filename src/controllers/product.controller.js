@@ -1,4 +1,5 @@
 import ProductService from "../services/product.service.js";
+import { asyncHandler, SuccessResponse, RequestValidator } from "../utils/apiHelpers.js";
 
 /**
  * Product Controller - Manages product catalog and inventory items
@@ -46,7 +47,7 @@ class ProductController {
    * 
    * Product Creation Process:
    * 1. Validate user authentication and business ownership
-   * 2. Extract category ID from query parameters
+   * 2. Extract category ID from request body
    * 3. Verify category exists and belongs to user's business
    * 4. Validate product information (name, price, quantity)
    * 5. Check product name uniqueness within business
@@ -64,9 +65,8 @@ class ProductController {
    * @static
    * @async
    * @param {Object} req - Express request object
-   * @param {Object} req.query - Query parameters
-   * @param {string} req.query.categoryId - Category ID where product will be created
    * @param {Object} req.body - Product creation data
+   * @param {string} req.body.categoryId - Category ID where product will be created
    * @param {string} req.body.name - Product name (required, unique within business)
    * @param {number} req.body.quantity - Initial stock quantity (non-negative)
    * @param {number} req.body.price - Product price (non-negative)
@@ -77,9 +77,10 @@ class ProductController {
    * @returns {Promise<void>} Product creation result
    * 
    * @example
-   * POST /api/products?categoryId=category_id_here
+   * POST /api/products
    * Headers: Authorization: Bearer jwt_token
    * {
+   *   "categoryId": "category_id_here",
    *   "name": "iPhone 15 Pro",
    *   "quantity": 50,
    *   "price": 999.99,
@@ -101,58 +102,23 @@ class ProductController {
    *     "createdAt": "2024-01-01T00:00:00.000Z"
    *   }
    * }
-   * 
-   * Error Responses:
-   * - 400: Missing/invalid data, duplicate name, or category issues
-   * - 401: User not authenticated
-   * - 403: User doesn't own business
-   * - 500: Server error during creation
    */
-  static async createProduct(req, res) {
-    try {
-      const { name, quantity, price, description, categoryId } = req.body;
-      const userId = req.user?.userId;
+  static createProduct = asyncHandler(async (req, res) => {
+    const { name, quantity, price, description, categoryId } = req.body;
+    const userId = req.user?.userId;
 
-      // Delegate comprehensive validation and creation logic to service layer
-      const result = await ProductService.createProduct(
-        name,
-        categoryId,
-        quantity,
-        price,
-        description,
-        userId
-      );
+    // Delegate comprehensive validation and creation logic to service layer
+    const result = await ProductService.createProduct(
+      name,
+      categoryId,
+      quantity,
+      price,
+      description,
+      userId
+    );
 
-      res.status(201).json({
-        message: "Product created successfully",
-        result: result,
-      });
-    } catch (err) {
-      // Handle input validation errors
-      if (
-        err.message === "Please provide a valid product name" ||
-        err.message === "Please provide a category" ||
-        err.message === "Please provide a valid price" ||
-        err.message === "Please provide a valid quantity" ||
-        err.message === "Category does not exist in your business" ||
-        err.message === "Product with this name already exists in your business" ||
-        err.message === "You must register a business before creating products" ||
-        err.message === "User authentication required"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Handle unexpected errors
-      console.error("Error creating product", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error creating product",
-      });
-    }
-  }
+    return SuccessResponse.created(res, result, "Product created successfully");
+  });
 
   /**
    * Get Products with Pagination and Filtering
@@ -198,82 +164,28 @@ class ProductController {
    * Success Response (200):
    * {
    *   "message": "Products retrieved successfully",
-   *   "products": [
-   *     {
-   *       "id": "product_id",
-   *       "name": "iPhone 15 Pro",
-   *       "price": 999.99,
-   *       "quantity": 45,
-   *       "isAvailable": true,
-   *       "inStock": true,
-   *       "category": {
-   *         "id": "category_id",
-   *         "name": "Smartphones"
-   *       },
-   *       "description": "Latest iPhone model",
-   *       "createdAt": "2024-01-01T00:00:00.000Z",
-   *       "updatedAt": "2024-01-02T00:00:00.000Z"
-   *     }
-   *   ],
+   *   "products": [...],
    *   "totalProducts": 156,
    *   "totalPages": 8,
    *   "currentPage": 1,
    *   "hasNextPage": true,
    *   "hasPrevPage": false
    * }
-   * 
-   * Error Responses:
-   * - 400: Invalid pagination or user has no business
-   * - 401: User not authenticated
-   * - 500: Server error during retrieval
    */
-  static async getProducts(req, res) {
-    try {
-      // Parse and validate pagination parameters
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const userId = req.user?.userId;
+  static getProducts = asyncHandler(async (req, res) => {
+    const { page, limit } = RequestValidator.validatePagination(req.query);
+    const userId = req.user?.userId;
 
-      // Validate pagination bounds
-      if (page < 1) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Page number must be greater than 0",
-        });
-      }
+    // Service handles business verification and data retrieval with joins
+    const result = await ProductService.getProducts(page, limit, userId);
 
-      if (limit < 1 || limit > 100) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Limit must be between 1 and 100",
-        });
-      }
-
-      // Service handles business verification and data retrieval with joins
-      const result = await ProductService.getProducts(page, limit, userId);
-
-      res.status(200).json(result
-      );
-    } catch (err) {
-      // Handle business logic errors
-      if (
-        err.message === "You must register a business to view products" ||
-        err.message === "User authentication required"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Handle unexpected errors
-      console.error("Error getting products", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error retrieving products",
-      });
-    }
-  }
+    return SuccessResponse.okWithPagination(
+      res,
+      result.products,
+      result.pagination,
+      "Products retrieved successfully"
+    );
+  });
 
   /**
    * Update Product Information
@@ -297,17 +209,11 @@ class ProductController {
    * - Price and quantity must be non-negative values
    * - System tracks all modification timestamps
    * 
-   * Inventory Impact:
-   * - Direct quantity updates affect available stock
-   * - Availability status automatically recalculated
-   * - Inventory history may be created for tracking
-   * - Stock level changes trigger business logic updates
-   * 
    * @static
    * @async
    * @param {Object} req - Express request object
-   * @param {Object} req.query - Query parameters
-   * @param {string} req.query.id - Product ID to update (required)
+   * @param {Object} req.params - URL parameters
+   * @param {string} req.params.id - Product ID to update (required)
    * @param {Object} req.body - Update data (partial updates supported)
    * @param {string} [req.body.name] - Updated product name (must be unique)
    * @param {string} [req.body.description] - Updated product description
@@ -321,7 +227,7 @@ class ProductController {
    * @returns {Promise<void>} Product update result
    * 
    * @example
-   * PUT /api/products?id=product_id
+   * PUT /api/products/product_id
    * Headers: Authorization: Bearer jwt_token
    * {
    *   "name": "iPhone 15 Pro Max",
@@ -333,59 +239,22 @@ class ProductController {
    * Success Response (200):
    * {
    *   "message": "Product updated successfully",
-   *   "result": {
-   *     "id": "product_id",
-   *     "name": "iPhone 15 Pro Max",
-   *     "price": 1199.99,
-   *     "quantity": 75,
-   *     "description": "Updated description",
-   *     "isAvailable": true,
-   *     "updatedAt": "2024-01-02T00:00:00.000Z"
-   *   }
+   *   "result": {...}
    * }
-   * 
-   * Error Responses:
-   * - 400: Missing ID, duplicate name, invalid data, or authorization issues
-   * - 404: Product not found
-   * - 500: Server error during update
    */
-  static async updateProduct(req, res) {
-    try {
-      const { id } = req.params;
-      const updateData = req.body;
-      const userId = req.user?.userId;
+  static updateProduct = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updateData = req.body;
+    const userId = req.user?.userId;
 
-      // Service handles validation, authorization, and complex update logic
-      const result = await ProductService.updateProduct(id, updateData, userId);
+    // Validate UUID format
+    RequestValidator.validateUUID(id, "Product ID");
 
-      res.status(200).json({
-        message: "Product updated successfully",
-        result: result,
-      });
-    } catch (err) {
-      // Handle validation and business logic errors
-      if (
-        err.message === "Product ID is required" ||
-        err.message === "Product does not exist" ||
-        err.message === "Product with name already exists in your business" ||
-        err.message === "Category does not exist in your business" ||
-        err.message === "You must own a business to update products" ||
-        err.message === "User authentication required"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
+    // Service handles validation, authorization, and complex update logic
+    const result = await ProductService.updateProduct(id, updateData, userId);
 
-      // Handle unexpected errors
-      console.error("Error updating product", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error updating product",
-      });
-    }
-  }
+    return SuccessResponse.ok(res, result, "Product updated successfully");
+  });
 
   /**
    * Delete Product
@@ -418,24 +287,18 @@ class ProductController {
    * - Product must exist and belong to user's business
    * - Deletion operations are logged for audit purposes
    * 
-   * Impact Assessment:
-   * - Permanent data loss (cannot be undone)
-   * - Affects inventory reports and analytics
-   * - Updates category product counts
-   * - Removes product from all business statistics
-   * 
    * @static
    * @async
    * @param {Object} req - Express request object
-   * @param {Object} req.params - Query parameters
-   * @param {string} req.query.id - Product ID to delete (required)
+   * @param {Object} req.params - URL parameters
+   * @param {string} req.params.id - Product ID to delete (required)
    * @param {Object} req.user - Authenticated user from JWT middleware
    * @param {string} req.user.userId - User ID for ownership verification
    * @param {Object} res - Express response object
    * @returns {Promise<void>} Product deletion confirmation
    * 
    * @example
-   * DELETE /api/products?id=product_id_to_delete
+   * DELETE /api/products/product_id_to_delete
    * Headers: Authorization: Bearer jwt_token
    * 
    * Success Response (200):
@@ -443,51 +306,21 @@ class ProductController {
    *   "message": "Product deleted successfully"
    * }
    * 
-   * Error Responses:
-   * - 400: Missing product ID, product not found, or authorization issues
-   * - 401: User not authenticated
-   * - 403: User doesn't own the business containing the product
-   * - 404: Product not found in user's business
-   * - 500: Server error during deletion (may indicate data integrity issues)
-   * 
    * @warning This operation is irreversible. Ensure proper confirmation
    * mechanisms are in place in the frontend before calling this endpoint.
-   * 
-   * @see ProductService.deleteProduct For detailed deletion logic and cascading operations
    */
-  static async deleteProduct(req, res) {
-    try {
-      const { id } = req.params;
-      const userId = req.user?.userId;
+  static deleteProduct = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user?.userId;
 
-      // Service handles validation, authorization, and cascading deletions
-      const message = await ProductService.deleteProduct(id, userId);
+    // Validate UUID format
+    RequestValidator.validateUUID(id, "Product ID");
 
-      res.status(200).json({
-        message: message,
-      });
-    } catch (err) {
-      // Handle validation and authorization errors
-      if (
-        err.message === "Product ID is required" ||
-        err.message === "Product does not exist" ||
-        err.message === "You must own a business to delete products" ||
-        err.message === "User authentication required"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
+    // Service handles validation, authorization, and cascading deletions
+    const message = await ProductService.deleteProduct(id, userId);
 
-      // Handle unexpected errors during deletion
-      console.error("Error deleting product", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error deleting product",
-      });
-    }
-  }
+    return SuccessResponse.ok(res, null, message);
+  });
 }
 
 export default ProductController;

@@ -1,4 +1,5 @@
 import BusinessService from "../services/business.service.js";
+import { asyncHandler, SuccessResponse, RequestValidator } from "../utils/apiHelpers.js";
 
 /**
  * Business Controller - Manages business operations and multi-tenancy
@@ -83,7 +84,7 @@ class BusinessController {
    *   }
    * }
    * 
-   * Success Response (200):
+   * Success Response (201):
    * {
    *   "message": "Business registered successfully",
    *   "business": {
@@ -101,53 +102,32 @@ class BusinessController {
    * - 401: User not authenticated
    * - 500: Server error during registration
    */
-  static async register(req, res) {
-    try {
-      // Extract authenticated user ID from JWT middleware
-      const userId = req.user?.userId;
-      const businessData = req.body;
+  static register = asyncHandler(async (req, res) => {
+    // Extract authenticated user ID from JWT middleware
+    const userId = req.user?.userId;
+    const businessData = req.body;
 
-      // Delegate business logic to service layer
-      // Service handles validation, uniqueness checks, and database operations
-      const result = await BusinessService.registerBusiness(
-        businessData,
-        userId
-      );
+    // Validate required fields
+    RequestValidator.validateRequired(req.body, ["name", "type"]);
 
-      res.status(200).json(result);
-    } catch (err) {
-      // Handle input validation errors
-      if (
-        err.message === "Please provide both name and type" ||
-        err.message === "User ID is required to register a business" ||
-        err.message === "Business with this name already exists"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
+    const result = await BusinessService.registerBusiness(businessData, userId);
 
-      // Handle unexpected errors
-      console.error("Error registering business", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error registering business",
-      });
-    }
-  }
+    // Use SuccessResponse for consistent formatting
+    return SuccessResponse.created(res, result.business, result.message);
+  });
 
   /**
    * Get Businesses with Filtering and Pagination
    * 
-   * Retrieves a paginated list of businesses with optional filtering capabilities.
-   * Supports search, filtering by type and owner, and pagination for large datasets.
+   * Retrieves a paginated list of businesses owned by the authenticated user
+   * with optional filtering capabilities. Supports search, filtering by type,
+   * and pagination for large datasets.
    * 
    * Query Features:
    * - Pagination with configurable page size
    * - Search by business name (partial match)
    * - Filter by business type
-   * - Filter by owner (useful for admin operations)
+   * - Automatic filtering by authenticated user (owner)
    * - Sorting by creation date (newest first)
    * 
    * Performance Considerations:
@@ -158,79 +138,62 @@ class BusinessController {
    * @static
    * @async
    * @param {Object} req - Express request object
+   * @param {Object} req.user - Authenticated user data from JWT middleware
+   * @param {string} req.user.userId - ID of the authenticated user
    * @param {Object} req.query - Query parameters for filtering and pagination
    * @param {number} [req.query.page=1] - Page number (starts from 1)
    * @param {number} [req.query.limit=10] - Items per page (max 100)
    * @param {string} [req.query.type] - Filter by business type
-   * @param {string} [req.query.owner] - Filter by owner ID (admin use)
    * @param {string} [req.query.search] - Search in business names
    * @param {Object} res - Express response object
    * @returns {Promise<void>} Paginated business list with metadata
    * 
    * @example
    * GET /api/business?page=1&limit=20&type=Technology&search=Tech
+   * Headers: Authorization: Bearer jwt_token
    * 
    * Success Response (200):
    * {
    *   "message": "Businesses retrieved successfully",
    *   "businesses": [business_objects],
-   *   "totalBusinesses": 45,
-   *   "totalPages": 3,
-   *   "currentPage": 1,
-   *   "hasNextPage": true,
-   *   "hasPrevPage": false
+   *   "pagination": {
+   *     "totalBusinesses": 45,
+   *     "totalPages": 3,
+   *     "currentPage": 1,
+   *     "hasNextPage": true,
+   *     "hasPrevPage": false
+   *   }
    * }
    * 
    * Error Responses:
    * - 400: Invalid pagination parameters
+   * - 401: User not authenticated
    * - 500: Server error during retrieval
    */
-  static async getBusinesses(req, res) {
-    try {
-      // Parse and validate pagination parameters
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
+  static getBusinesses = asyncHandler(async (req, res) => {
+    // Validate pagination parameters
+    const { page, limit } = RequestValidator.validatePagination(req.query);
 
-      // Validate pagination bounds
-      if (page < 1) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Page number must be greater than 0",
-        });
-      }
+    const userId = req.user?.userId;
 
-      if (limit < 1 || limit > 100) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Limit must be between 1 and 100",
-        });
-      }
+    // Build filter object from query parameters
+    // Automatically add owner filter for the authenticated user
+    const filters = {
+      owner: userId,
+      type: req.query.type,
+      search: req.query.search,
+    };
 
-      const userId = req.user?.userId;
+    // Service handles filtering, pagination, and data aggregation
+    const result = await BusinessService.getBusinesses(page, limit, filters);
 
-      // Build filter object from query parameters
-      // Automatically add owner filter for the authenticated user
-      const filters = {
-        owner: userId,
-      };
-
-      // Add optional filters
-      if (req.query.type) filters.type = req.query.type;
-      if (req.query.search) filters.search = req.query.search;
-
-      // Service handles filtering, pagination, and data aggregation
-      const result = await BusinessService.getBusinesses(page, limit, filters);
-
-      res.status(200).json(
-        result);
-    } catch (err) {
-      console.error("Error getting businesses", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error retrieving businesses",
-      });
-    }
-  }
+    return SuccessResponse.okWithPagination(
+      res,
+      result.businesses,
+      result.pagination,
+      result.message
+    );
+  });
 
   /**
    * Update Business Information
@@ -260,9 +223,10 @@ class BusinessController {
    * @static
    * @async
    * @param {Object} req - Express request object
-   * @param {Object} req.query - Query parameters
-   * @param {string} req.query.id - Business ID to update
-   * @param {string} req.query.userId - Owner's user ID for verification
+   * @param {Object} req.params - URL parameters
+   * @param {string} req.params.id - Business ID to update
+   * @param {Object} req.user - Authenticated user data from JWT middleware
+   * @param {string} req.user.userId - User ID for ownership verification
    * @param {Object} req.body - Update data (partial object allowed)
    * @param {string} [req.body.name] - Updated business name
    * @param {string} [req.body.type] - Updated business type
@@ -274,7 +238,8 @@ class BusinessController {
    * @returns {Promise<void>} Business update result
    * 
    * @example
-   * PUT /api/business?id=business_id&userId=owner_id
+   * PUT /api/business/business_id_here
+   * Headers: Authorization: Bearer jwt_token
    * {
    *   "description": "Updated business description",
    *   "contactInfo": {
@@ -290,62 +255,27 @@ class BusinessController {
    * }
    * 
    * Error Responses:
-   * - 400: Missing business ID, unauthorized access, or duplicate name
+   * - 400: Missing business ID, invalid UUID format, unauthorized access, or duplicate name
+   * - 401: User not authenticated
    * - 404: Business not found
    * - 500: Server error during update
    */
-  static async updateBusiness(req, res) {
-    try {
-      const { id } = req.params;
-      const userId = req.user?.userId;
+  static updateBusiness = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user?.userId;
 
-      // Build update object, filtering out undefined values
-      const updateData = {
-        name: req.body.name,
-        type: req.body.type,
-        categories: req.body.categories,
-        description: req.body.description,
-        address: req.body.address,
-        contactInfo: req.body.contactInfo,
-      };
+    // Validate UUID format
+    RequestValidator.validateUUID(id, "Business ID");
 
-      // Remove undefined fields to support partial updates
-      Object.keys(updateData).forEach((key) => {
-        if (updateData[key] === undefined) {
-          delete updateData[key];
-        }
-      });
+    // Service handles authorization, validation, and database operations
+    const result = await BusinessService.updateBusiness(
+      id,
+      req.body,
+      userId
+    );
 
-      // Service handles authorization, validation, and database operations
-      const result = await BusinessService.updateBusiness(
-        id,
-        updateData,
-        userId
-      );
-
-      res.status(200).json(result);
-    } catch (err) {
-      // Handle business logic and validation errors
-      if (
-        err.message === "Please provide your business ID" ||
-        err.message === "Business does not exist" ||
-        err.message === "You are not authorized to update this business" ||
-        err.message === "Business with this name already exists"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Handle unexpected errors
-      console.error("Error updating business", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error updating business",
-      });
-    }
-  }
+    return SuccessResponse.ok(res, result.business, result.message);
+  });
 
   /**
    * Delete Business
@@ -391,53 +321,29 @@ class BusinessController {
    * 
    * Success Response (200):
    * {
-   *   "message": "Business deleted successfully",
-   *   "deletedBusinessId": "business_id_here",
-   *   "associatedDataCleaned": {
-   *     "categories": 5,
-   *     "products": 23,
-   *     "inventoryRecords": 156
-   *   }
+   *   "message": "Business deleted successfully"
    * }
    * 
    * Error Responses:
-   * - 400: Missing business ID or unauthorized access
+   * - 400: Missing business ID, invalid UUID format, or unauthorized access
+   * - 401: User not authenticated
    * - 404: Business not found
    * - 500: Server error during deletion
    */
-  static async deleteBusiness(req, res) {
-    try {
-      // Extract business ID from URL parameters
-      const { id } = req.params;
+  static deleteBusiness = asyncHandler(async (req, res) => {
+    // Extract business ID from URL parameters
+    const { id } = req.params;
 
-      // Get authenticated user ID
-      const userId = req.user?.userId;
+    // Get authenticated user ID
+    const userId = req.user?.userId;
 
-      // Service handles authorization checks and cascading deletion
-      const result = await BusinessService.deleteBusiness(id, userId);
+    RequestValidator.validateUUID(id, "Business ID");
 
-      res.status(200).json(result);
-    } catch (err) {
-      // Handle business logic and authorization errors
-      if (
-        err.message === "Business ID is required" ||
-        err.message === "Business does not exist" ||
-        err.message === "You are not authorized to delete this business"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
+    // Service handles authorization checks and cascading deletion
+    const message = await BusinessService.deleteBusiness(id, userId);
 
-      // Handle unexpected errors
-      console.error("Error deleting business", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error deleting business",
-      });
-    }
-  }
+    return SuccessResponse.ok(res, null, message);
+  });
 }
 
 export default BusinessController;

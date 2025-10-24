@@ -1,4 +1,5 @@
 import CategoryService from "../services/category.service.js";
+import { asyncHandler, SuccessResponse, RequestValidator } from "../utils/apiHelpers.js";
 
 /**
  * Category Controller - Manages product categorization within businesses
@@ -93,42 +94,20 @@ class CategoryController {
    * - 401: User not authenticated
    * - 500: Server error during creation
    */
-  static async createCategory(req, res) {
-    try {
-      const { name, description } = req.body;
-      const userId = req.user?.userId;
+  static createCategory = asyncHandler(async (req, res) => {
+    const { name, description } = req.body;
+    const userId = req.user?.userId;
 
-      // Delegate business logic to service layer
-      // Service handles validation, business ownership checks, and database operations
-      const result = await CategoryService.createCategory(
-        name,
-        description,
-        userId
-      );
+    // Delegate business logic to service layer
+    // Service handles validation, business ownership checks, and database operations
+    const result = await CategoryService.createCategory(
+      name,
+      description,
+      userId
+    );
 
-      res.status(201).json(result);
-    } catch (err) {
-      // Handle validation and business logic errors
-      if (
-        err.message === "Please provide a valid category name" ||
-        err.message === "Category with this name already exists" ||
-        err.message === "You must register a business before creating categories" ||
-        err.message === "User authentication required"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Handle unexpected errors
-      console.error("Error creating category", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error creating category",
-      });
-    }
-  }
+    return SuccessResponse.created(res, result.category, result.message);
+  });
 
   /**
    * Get Categories with Pagination
@@ -182,11 +161,13 @@ class CategoryController {
    *       "createdAt": "2024-01-01T00:00:00.000Z"
    *     }
    *   ],
-   *   "totalCategories": 5,
-   *   "totalPages": 1,
-   *   "currentPage": 1,
-   *   "hasNextPage": false,
-   *   "hasPrevPage": false
+   *   "pagination": {
+   *     "totalCategories": 5,
+   *     "totalPages": 1,
+   *     "currentPage": 1,
+   *     "hasNextPage": false,
+   *     "hasPrevPage": false
+   *   }
    * }
    * 
    * Error Responses:
@@ -194,54 +175,21 @@ class CategoryController {
    * - 401: User not authenticated
    * - 500: Server error during retrieval
    */
-  static async getCategories(req, res) {
-    try {
-      // Parse and validate pagination parameters
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const userId = req.user?.userId;
+  static getCategories = asyncHandler(async (req, res) => {
+    // Validate pagination parameters
+    const { page, limit } = RequestValidator.validatePagination(req.query);
+    const userId = req.user?.userId;
 
-      // Validate pagination bounds
-      if (page < 1) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Page number must be greater than 0",
-        });
-      }
+    // Service handles business ownership verification and data retrieval
+    const result = await CategoryService.getCategories(page, limit, userId);
 
-      if (limit < 1 || limit > 100) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Limit must be between 1 and 100",
-        });
-      }
-
-      // Service handles business ownership verification and data retrieval
-      const result = await CategoryService.getCategories(page, limit, userId);
-
-      res.status(200).json(
-        result
-      );
-    } catch (err) {
-      // Handle business logic errors
-      if (
-        err.message === "You must register a business to view categories" ||
-        err.message === "User authentication required"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Handle unexpected errors
-      console.error("Error getting categories", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error retrieving categories",
-      });
-    }
-  }
+    return SuccessResponse.okWithPagination(
+      res,
+      result.categories,
+      result.pagination,
+      result.message
+    );
+  });
 
   /**
    * Update Category Information
@@ -251,7 +199,7 @@ class CategoryController {
    * Supports partial updates where only provided fields are changed.
    * 
    * Update Process:
-   * 1. Validate category ID is provided
+   * 1. Validate category ID from URL parameters
    * 2. Verify user authentication and business ownership
    * 3. Check category exists and belongs to user's business
    * 4. Validate new name uniqueness (if name is being updated)
@@ -259,7 +207,7 @@ class CategoryController {
    * 6. Return updated category information
    * 
    * Business Rules:
-   * - Category ID is required in query parameters
+   * - Category ID is required in URL parameters
    * - Only category owner can update categories
    * - Updated name must be unique within business
    * - Partial updates supported (name and/or description)
@@ -268,8 +216,8 @@ class CategoryController {
    * @static
    * @async
    * @param {Object} req - Express request object
-   * @param {Object} req.query - Query parameters
-   * @param {string} req.query.id - Category ID to update (required)
+   * @param {Object} req.params - URL parameters
+   * @param {string} req.params.id - Category ID to update (required)
    * @param {Object} req.body - Update data
    * @param {string} [req.body.name] - New category name (must be unique)
    * @param {string} [req.body.description] - New category description
@@ -279,7 +227,7 @@ class CategoryController {
    * @returns {Promise<void>} Category update result
    * 
    * @example
-   * PUT /api/categories?id=category_id
+   * PUT /api/categories/category_id_here
    * Headers: Authorization: Bearer jwt_token
    * {
    *   "name": "Consumer Electronics",
@@ -299,48 +247,29 @@ class CategoryController {
    * }
    * 
    * Error Responses:
-   * - 400: Missing ID, duplicate name, or authorization issues
+   * - 400: Missing ID, invalid UUID format, duplicate name, or authorization issues
+   * - 401: User not authenticated
    * - 404: Category not found
    * - 500: Server error during update
    */
-  static async updateCategory(req, res) {
-    try {
-      const { id } = req.params;
-      const { name, description } = req.body;
-      const userId = req.user?.userId;
+  static updateCategory = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    const userId = req.user?.userId;
 
-      // Service handles validation, authorization, and database operations
-      const result = await CategoryService.updateCategory(
-        id,
-        name,
-        description,
-        userId
-      );
+    // Validate UUID format
+    RequestValidator.validateUUID(id, "Category ID");
 
-      res.status(200).json(result);
-    } catch (err) {
-      // Handle validation and business logic errors
-      if (
-        err.message === "Category ID is required" ||
-        err.message === "Category does not exist" ||
-        err.message === "Category with name already exists" ||
-        err.message === "You must own a business to update categories" ||
-        err.message === "User authentication required"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
+    // Service handles validation, authorization, and database operations
+    const result = await CategoryService.updateCategory(
+      id,
+      name,
+      description,
+      userId
+    );
 
-      // Handle unexpected errors
-      console.error("Error updating category", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error updating category",
-      });
-    }
-  }
+    return SuccessResponse.ok(res, result.category, result.message);
+  });
 
   /**
    * Delete Category
@@ -350,7 +279,7 @@ class CategoryController {
    * destructive operation that requires proper authorization.
    * 
    * Deletion Process:
-   * 1. Validate category ID and user authentication
+   * 1. Validate category ID from URL parameters and user authentication
    * 2. Verify category exists and belongs to user's business
    * 3. Check for associated products and handle cleanup:
    *    - Remove products in the category
@@ -373,63 +302,39 @@ class CategoryController {
    * @static
    * @async
    * @param {Object} req - Express request object
-   * @param {Object} req.query - Query parameters
-   * @param {string} req.query.id - Category ID to delete (required)
+   * @param {Object} req.params - URL parameters
+   * @param {string} req.params.id - Category ID to delete (required)
    * @param {Object} req.user - Authenticated user from JWT middleware
    * @param {string} req.user.userId - User ID for ownership verification
    * @param {Object} res - Express response object
    * @returns {Promise<void>} Category deletion result
    * 
    * @example
-   * DELETE /api/categories?id=category_id
+   * DELETE /api/categories/category_id_here
    * Headers: Authorization: Bearer jwt_token
    * 
    * Success Response (200):
    * {
-   *   "message": "Category deleted successfully",
-   *   "deletedCategoryId": "category_id",
-   *   "affectedProducts": 5,
-   *   "cleanupCompleted": true
+   *   "message": "Category deleted successfully"
    * }
    * 
    * Error Responses:
-   * - 400: Missing ID, category not found, or authorization issues
+   * - 400: Missing ID, invalid UUID format, category not found, or authorization issues
    * - 401: User not authenticated
    * - 500: Server error during deletion
    */
-  static async deleteCategory(req, res) {
-    try {
-      const { id } = req.params;
-      const userId = req.user?.userId;
+  static deleteCategory = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user?.userId;
 
-      // Service handles authorization, cascading deletion, and cleanup
-      const result = await CategoryService.deleteCategory(id, userId);
+    // Validate UUID format
+    RequestValidator.validateUUID(id, "Category ID");
 
-      res.status(200).json({
-        message: result,
-      });
-    } catch (err) {
-      // Handle validation and business logic errors
-      if (
-        err.message === "Category ID is required" ||
-        err.message === "Category does not exist" ||
-        err.message === "You must own a business to delete categories" ||
-        err.message === "User authentication required"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
+    // Service handles authorization, cascading deletion, and cleanup
+    const message = await CategoryService.deleteCategory(id, userId);
 
-      // Handle unexpected errors
-      console.error("Error deleting category", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error deleting category",
-      });
-    }
-  }
+    return SuccessResponse.ok(res, null, message);
+  });
 }
 
 export default CategoryController;

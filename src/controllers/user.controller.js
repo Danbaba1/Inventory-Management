@@ -1,4 +1,5 @@
 import UserService from "../services/user.service.js";
+import { asyncHandler, SuccessResponse, RequestValidator } from "../utils/apiHelpers.js";
 
 /**
  * User Controller - Handles all user-related HTTP requests
@@ -26,70 +27,48 @@ import UserService from "../services/user.service.js";
 class UserController {
 
   /**
- * Create Admin User
- * 
- * Creates a new admin user in the system. Admin must login separately after creation.
- * 
- * @static
- * @async
- * @param {Object} req - Express request object
- * @param {Object} req.body - Request body
- * @param {string} req.body.email - Admin user's email address
- * @param {string} req.body.password - Admin password (min 8 characters)
- * @param {Object} res - Express response object
- * @returns {Promise<void>} JSON response with admin creation result
- */
-  static async createAdmin(req, res) {
-    try {
-      const { email, password } = req.body; // Changed from name to email
+   * Create Admin User
+   * 
+   * Creates a new admin user in the system. Admin must login separately after creation.
+   * 
+   * @static
+   * @async
+   * @param {Object} req - Express request object
+   * @param {Object} req.body - Request body
+   * @param {string} req.body.email - Admin user's email address
+   * @param {string} req.body.password - Admin password (min 8 characters)
+   * @param {Object} res - Express response object
+   * @returns {Promise<void>} JSON response with admin creation result
+   * 
+   * @example
+   * POST /api/users/admin
+   * {
+   *   "email": "admin@example.com",
+   *   "password": "securepass123"
+   * }
+   * 
+   * Success Response (201):
+   * {
+   *   "message": "Admin created successfully",
+   *   "result": {...},
+   *   "nextStep": "Please login using your email and password to access admin features"
+   * }
+   */
+  static createAdmin = asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
 
-      // Delegate business logic to service layer
-      const result = await UserService.createAdmin(email, password);
+    // Delegate business logic to service layer
+    const result = await UserService.createAdmin(email, password);
 
-      res.status(201).json({
-        message: "Admin created successfully",
-        result: result,
+    return SuccessResponse.created(
+      res,
+      {
+        ...result,
         nextStep: "Please login using your email and password to access admin features"
-      });
-    } catch (err) {
-      // Handle validation errors
-      if (err.message === "Please provide both email and password") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      if (err.message === "Password must be at least 8 characters long") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      if (err.message === "Please provide a valid email address") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Handle business logic conflicts
-      if (err.message === "Admin with this email already exists") {
-        return res.status(409).json({
-          error: "Conflict",
-          message: err.message,
-        });
-      }
-
-      // Handle unexpected errors
-      console.error("Create admin error", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "An error occurred while creating admin",
-      });
-    }
-  }
+      },
+      "Admin created successfully"
+    );
+  });
 
   /**
    * User Registration
@@ -138,59 +117,22 @@ class UserController {
    *   "nextStep": "Please check your email and verify using the OTP sent"
    * }
    */
-  static async register(req, res) {
-    try {
-      const { name, phone, password, email } = req.body;
+  static register = asyncHandler(async (req, res) => {
+    const { name, phone, password, email } = req.body;
 
-      // Service layer handles validation, user creation, and OTP sending
-      const result = await UserService.register(name, phone, password, email);
+    // Service layer handles validation, user creation, and OTP sending
+    const result = await UserService.register(name, phone, password, email);
 
-      res.status(201).json({
-        message: result.message,
+    return SuccessResponse.created(
+      res,
+      {
         userId: result.userId,
         email: result.email,
-        nextStep: "Please check your email and verify using the OTP sent",
-      });
-    } catch (err) {
-      // Input validation errors
-      if (err.message === "Please complete your details") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      if (err.message === "Please provide a valid email address") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Business logic conflicts
-      if (err.message === "User already exists") {
-        return res.status(409).json({
-          error: "Conflict",
-          message: err.message,
-        });
-      }
-
-      // Service availability errors
-      if (err.message === "Email service temporarily unavailable") {
-        return res.status(503).json({
-          error: "Service Unavailable",
-          message: "Unable to send verification email. Please try again later",
-        });
-      }
-
-      // Unexpected errors
-      console.error("Registration error:", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "An error occurred during registration",
-      });
-    }
-  }
+        nextStep: "Please check your email and verify using the OTP sent"
+      },
+      result.message
+    );
+  });
 
   /**
    * Email Verification with OTP
@@ -233,79 +175,15 @@ class UserController {
    *   "message": "Email verified successfully",
    *   "user": { userData }
    * }
-   * 
-   * Error Responses:
-   * - 400: Invalid OTP, expired OTP, or already verified
-   * - 404: User not found
-   * - 429: Too many failed attempts
    */
-  static async verifyEmail(req, res) {
-    try {
-      const { email, otp } = req.body;
+  static verifyEmail = asyncHandler(async (req, res) => {
+    const { email, otp } = req.body;
 
-      // Service handles OTP validation, attempt tracking, and user activation
-      const result = await UserService.verifyEmailOTP(email, otp);
+    // Service handles OTP validation, attempt tracking, and user activation
+    const result = await UserService.verifyEmailOTP(email, otp);
 
-      res.status(200).json({
-        message: result.message,
-        user: result.user,
-      });
-    } catch (err) {
-      // Input validation errors
-      if (err.message === "Email and OTP are required") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // User existence errors
-      if (err.message === "User not found") {
-        return res.status(404).json({
-          error: "Not Found",
-          message: err.message,
-        });
-      }
-
-      // Business logic validation
-      if (err.message === "Email is already verified") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Rate limiting and security
-      if (err.message === "Too many failed attempts. Please request a new OTP") {
-        return res.status(429).json({
-          error: "Too Many Requests",
-          message: err.message,
-        });
-      }
-
-      // OTP validation errors
-      if (err.message === "OTP has expired. Please request a new one") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      if (err.message === "Invalid OTP") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Unexpected errors
-      console.error("Email verification error:", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "An error occurred during email verification",
-      });
-    }
-  }
+    return SuccessResponse.ok(res, result.user, result.message);
+  });
 
   /**
    * Resend OTP
@@ -341,72 +219,23 @@ class UserController {
    * {
    *   "message": "New OTP sent to your email address"
    * }
-   * 
-   * Error Responses:
-   * - 400: Email required or already verified
-   * - 404: User not found
-   * - 429: Rate limit exceeded
-   * - 503: Email service unavailable
    */
-  static async resendOTP(req, res) {
-    try {
-      const { email } = req.body;
+  static resendOTP = asyncHandler(async (req, res) => {
+    const { email } = req.body;
 
-      // Basic input validation
-      if (!email) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Email is required",
-        });
-      }
-
-      // Service handles rate limiting, OTP generation, and email sending
-      const result = await UserService.resendVerificationOTP(email);
-
-      res.status(200).json({
-        message: result,
-      });
-    } catch (err) {
-      // User existence validation
-      if (err.message === "User not found") {
-        return res.status(404).json({
-          error: "Not Found",
-          message: err.message,
-        });
-      }
-
-      // Business logic validation
-      if (err.message === "Email is already verified") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Rate limiting
-      if (err.message === "Please wait 1 minute before requesting another OTP") {
-        return res.status(429).json({
-          error: "Too Many Requests",
-          message: err.message,
-        });
-      }
-
-      // Service availability
-      if (err.message === "Email service temporarily unavailable") {
-        return res.status(503).json({
-          error: "Service Unavailable",
-          message: "Unable to send email at this time. Please try again later",
-        });
-      }
-
-      // Unexpected errors
-      console.error("Resend OTP error:", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "An error occurred while resending OTP",
+    // Basic input validation
+    if (!email) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Email is required",
       });
     }
-  }
+
+    // Service handles rate limiting, OTP generation, and email sending
+    const message = await UserService.resendVerificationOTP(email);
+
+    return SuccessResponse.ok(res, null, message);
+  });
 
   /**
    * User Login
@@ -450,57 +279,22 @@ class UserController {
    *   "token": "jwt_token_string",
    *   "user": { userData }
    * }
-   * 
-   * Error Responses:
-   * - 401: User doesn't exist or invalid password
-   * - 403: Email not verified
-   * - 500: Server error
    */
-  static async login(req, res) {
-    try {
-      const { email, password } = req.body;
+  static login = asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
 
-      // Service handles user lookup, verification checks, and token generation
-      const result = await UserService.login(email, password);
+    // Service handles user lookup, verification checks, and token generation
+    const result = await UserService.login(email, password);
 
-      res.status(200).json({
-        message: "Login successful",
+    return SuccessResponse.ok(
+      res,
+      {
         token: result.jwtToken,
-        user: result.user,
-      });
-    } catch (err) {
-      // User existence validation
-      if (err.message === "User does not exist") {
-        return res.status(401).json({
-          error: "Unauthorized",
-          message: err.message,
-        });
-      }
-
-      // Email verification requirement
-      if (err.message === "Please verify your email before logging in") {
-        return res.status(403).json({
-          error: "Forbidden",
-          message: err.message,
-        });
-      }
-
-      // Credential validation
-      if (err.message === "Invalid Password") {
-        return res.status(400).json({
-          error: "Unauthorized",
-          message: err.message,
-        });
-      }
-
-      // Unexpected errors
-      console.error("Login error", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "An error occurred during login",
-      });
-    }
-  }
+        user: result.user
+      },
+      "Login successful"
+    );
+  });
 
   /**
    * Forgot Password
@@ -528,61 +322,25 @@ class UserController {
    * @param {string} req.body.email - User's registered email address
    * @param {Object} res - Express response object
    * @returns {Promise<void>} Password reset initiation result
+   * 
+   * @example
+   * POST /api/users/forgot-password
+   * {
+   *   "email": "john@example.com"
+   * }
+   * 
+   * Success Response (200):
+   * {
+   *   "message": "Password reset link sent to your email"
+   * }
    */
-  static async forgotPassword(req, res) {
-    try {
-      const { email } = req.body;
+  static forgotPassword = asyncHandler(async (req, res) => {
+    const { email } = req.body;
 
-      const result = await UserService.forgotPassword(email);
+    const message = await UserService.forgotPassword(email);
 
-      res.status(200).json({
-        message: result,
-      });
-    } catch (err) {
-      // Input validation
-      if (
-        err.message === "Email is required" ||
-        err.message === "Please provide a valid email address"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Business logic requirements
-      if (
-        err.message ===
-        "Please verify your email first before resetting password"
-      ) {
-        return res.status(403).json({
-          error: "Forbidden",
-          message: err.message,
-        });
-      }
-
-      // Service availability
-      if (err.message === "Email service temporarily unavailable") {
-        return res.status(503).json({
-          error: "Service Unavailable",
-          message: "Unable to send email at this time. Please try again later",
-        });
-      }
-
-      if (err.message === "User not found") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      console.error("Forgot password error:", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "An error occured while processing the request",
-      });
-    }
-  }
+    return SuccessResponse.ok(res, null, message);
+  });
 
   /**
    * Reset Password
@@ -607,59 +365,33 @@ class UserController {
    * @param {string} req.body.newPassword - New password (min 8 characters)
    * @param {Object} res - Express response object
    * @returns {Promise<void>} Password reset completion result
+   * 
+   * @example
+   * POST /api/users/reset-password
+   * {
+   *   "token": "secure_reset_token",
+   *   "newPassword": "newsecurepass123"
+   * }
+   * 
+   * Success Response (200):
+   * {
+   *   "message": "Password reset successfully"
+   * }
    */
-  static async resetPassword(req, res) {
-    try {
-      const { token, newPassword } = req.body;
+  static resetPassword = asyncHandler(async (req, res) => {
+    const { token, newPassword } = req.body;
 
-      if (!token || !newPassword) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Token and new password are required",
-        });
-      }
-
-      const result = await UserService.resetPassword(token, newPassword);
-
-      res.status(200).json({
-        message: result,
-      });
-    } catch (err) {
-      // Input validation
-      if (
-        err.message === "Reset token is required" ||
-        err.message === "New password is required" ||
-        err.message === "Password must be at least 8 characters long"
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      // Token validation
-      if (err.message === "Invalid token") {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Invalid or malformed reset token",
-        });
-      }
-
-      if (err.message === "Token expired") {
-        return res.status(401).json({
-          error: "Unauthorized",
-          message:
-            "Reset token has expired. Please request a new password reset",
-        });
-      }
-
-      console.error("Reset password error", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "An error occurred while resetting the password",
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Token and new password are required",
       });
     }
-  }
+
+    const message = await UserService.resetPassword(token, newPassword);
+
+    return SuccessResponse.ok(res, null, message);
+  });
 
   /**
    * Get Users (Admin Only)
@@ -704,47 +436,27 @@ class UserController {
    *   "hasPrevPage": false
    * }
    */
-  static async getUsers(req, res) {
-    try {
-      // Parse and validate pagination parameters
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
+  static getUsers = asyncHandler(async (req, res) => {
+    const { page, limit } = RequestValidator.validatePagination(req.query);
 
-      // Validate pagination bounds
-      if (page < 1) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Page number must be greater than 0",
-        });
-      }
-
-      if (limit < 1 || limit > 100) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Limit must be between 1 and 100",
-        });
-      }
-
-      // Role-based access control
-      if (req.user?.role !== "admin") {
-        return res.status(403).json({
-          error: "Forbidden",
-          message: "Admin access required",
-        });
-      }
-
-      // Service handles data retrieval and pagination
-      const result = await UserService.getUsers(page, limit);
-
-      res.status(200).json(result);
-    } catch (err) {
-      console.error("Error getting users", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error retrieving users",
+    // Role-based access control
+    if (req.user?.role !== "admin") {
+      return res.status(403).json({
+        error: "Forbidden",
+        message: "Admin access required",
       });
     }
-  }
+
+    // Service handles data retrieval and pagination
+    const result = await UserService.getUsers(page, limit);
+
+    return SuccessResponse.okWithPagination(
+      res,
+      result.users,
+      result.pagination,
+      "Users retrieved successfully"
+    );
+  });
 }
 
 export default UserController;
