@@ -12,9 +12,10 @@
  */
 
 import InventoryService from "../services/inventory.service.js";
+import { asyncHandler, SuccessResponse, RequestValidator } from "../utils/apiHelpers.js";
 
 /**
- * Fixed Inventory Controller
+ * Inventory Controller
  * Properly handles UUID validation and user authentication
  * 
  * This controller manages inventory operations with proper validation,
@@ -24,26 +25,6 @@ import InventoryService from "../services/inventory.service.js";
  * @class InventoryController
  */
 class InventoryController {
-
-  /**
-   * Helper function to validate UUID format
-   * 
-   * Validates that a string matches the standard UUID v4 format.
-   * Uses regex pattern to ensure proper UUID structure with hyphens
-   * and correct character ranges.
-   * 
-   * @static
-   * @param {string} uuid - The UUID string to validate
-   * @returns {boolean} True if valid UUID format, false otherwise
-   * 
-   * @example
-   * InventoryController.isValidUUID('550e8400-e29b-41d4-a716-446655440000'); // true
-   * InventoryController.isValidUUID('invalid-uuid'); // false
-   */
-  static isValidUUID(uuid) {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
-  }
 
   /**
    * Increment Product Quantity (Stock Top-Up)
@@ -69,79 +50,43 @@ class InventoryController {
    * @returns {Promise<void>} JSON response with transaction details or error
    * 
    * @example
-   * // POST /api/inventory/products/550e8400-e29b-41d4-a716-446655440000/increment
-   * // Body: { "quantity": 50, "reason": "New stock delivery", "referenceId": "PO-2024-001" }
+   * POST /api/inventory/products/550e8400-e29b-41d4-a716-446655440000/increment
+   * Body: { "quantity": 50, "reason": "New stock delivery", "referenceId": "PO-2024-001" }
    * 
-   * // Success Response (200):
+   * Success Response (200):
    * {
    *   "transactionId": "123e4567-e89b-12d3-a456-426614174000",
    *   "newQuantity": 150,
    *   "message": "Stock incremented successfully"
    * }
-   * 
-   * // Error Response (400):
-   * {
-   *   "error": "Bad Request",
-   *   "message": "Invalid product ID format. Expected UUID format."
-   * }
    */
-  static async incrementQuantity(req, res) {
-    try {
-      const { productId } = req.params; // Get from URL params instead of query
-      const userId = req.user.userId; // Get from authenticated user
-      const { quantity, reason, referenceId } = req.body;
+  static incrementQuantity = asyncHandler(async (req, res) => {
+    const { productId } = req.params;
+    const userId = req.user?.userId;
+    const { quantity, reason, referenceId } = req.body;
 
-      // Validate required parameters
-      if (!productId) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Product ID is required",
-        });
-      }
+    // Validate UUID format
+    RequestValidator.validateUUID(productId, "Product ID");
 
-      // Validate UUID format
-      if (!InventoryController.isValidUUID(productId)) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Invalid product ID format. Expected UUID format.",
-        });
-      }
-
-      if (!quantity || quantity <= 0) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Valid quantity greater than 0 is required",
-        });
-      }
-
-      const result = await InventoryService.incrementQuantity(
-        productId,
-        quantity,
-        userId,
-        reason,
-        referenceId
-      );
-
-      res.status(200).json(result);
-    } catch (err) {
-      if (
-        err.message.includes("Product not found") ||
-        err.message.includes("not authorized") ||
-        err.message.includes("required")
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      console.error("Error incrementing quantity:", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error incrementing quantity",
+    // Validate quantity
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Valid quantity greater than 0 is required",
       });
     }
-  }
+
+    // Delegate to service layer
+    const result = await InventoryService.incrementQuantity(
+      productId,
+      quantity,
+      userId,
+      reason,
+      referenceId
+    );
+
+    return SuccessResponse.ok(res, result, "Stock incremented successfully");
+  });
 
   /**
    * Decrement Product Quantity (Stock Usage)
@@ -167,80 +112,43 @@ class InventoryController {
    * @returns {Promise<void>} JSON response with transaction details or error
    * 
    * @example
-   * // POST /api/inventory/products/550e8400-e29b-41d4-a716-446655440000/decrement
-   * // Body: { "quantity": 10, "reason": "Sale to customer", "referenceId": "ORDER-2024-001" }
+   * POST /api/inventory/products/550e8400-e29b-41d4-a716-446655440000/decrement
+   * Body: { "quantity": 10, "reason": "Sale to customer", "referenceId": "ORDER-2024-001" }
    * 
-   * // Success Response (200):
+   * Success Response (200):
    * {
    *   "transactionId": "123e4567-e89b-12d3-a456-426614174001",
    *   "newQuantity": 140,
    *   "message": "Stock decremented successfully"
    * }
-   * 
-   * // Error Response (400):
-   * {
-   *   "error": "Bad Request",
-   *   "message": "Insufficient quantity available"
-   * }
    */
-  static async decrementQuantity(req, res) {
-    try {
-      const { productId } = req.params; // Get from URL params instead of query
-      const userId = req.user.userId; // Get from authenticated user
-      const { quantity, reason, referenceId } = req.body;
+  static decrementQuantity = asyncHandler(async (req, res) => {
+    const { productId } = req.params;
+    const userId = req.user?.userId;
+    const { quantity, reason, referenceId } = req.body;
 
-      // Validate required parameters
-      if (!productId) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Product ID is required",
-        });
-      }
+    // Validate UUID format
+    RequestValidator.validateUUID(productId, "Product ID");
 
-      // Validate UUID format
-      if (!InventoryController.isValidUUID(productId)) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Invalid product ID format. Expected UUID format.",
-        });
-      }
-
-      if (!quantity || quantity <= 0) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Valid quantity greater than 0 is required",
-        });
-      }
-
-      const result = await InventoryService.decrementQuantity(
-        productId,
-        quantity,
-        userId,
-        reason,
-        referenceId
-      );
-
-      res.status(200).json(result);
-    } catch (err) {
-      if (
-        err.message.includes("Product not found") ||
-        err.message.includes("not authorized") ||
-        err.message.includes("Insufficient quantity") ||
-        err.message.includes("required")
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      console.error("Error decrementing quantity:", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error decrementing quantity",
+    // Validate quantity
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Valid quantity greater than 0 is required",
       });
     }
-  }
+
+    // Delegate to service layer
+    const result = await InventoryService.decrementQuantity(
+      productId,
+      quantity,
+      userId,
+      reason,
+      referenceId
+    );
+
+    return SuccessResponse.ok(res, result, "Stock decremented successfully");
+  });
 
   /**
    * Get Complete Inventory History for a Specific Product
@@ -268,21 +176,12 @@ class InventoryController {
    * @returns {Promise<void>} JSON response with paginated transaction history
    * 
    * @example
-   * // GET /api/inventory/products/550e8400-e29b-41d4-a716-446655440000/history?page=1&limit=20&transactionType=TOP_UP
+   * GET /api/inventory/products/550e8400-e29b-41d4-a716-446655440000/history?page=1&limit=20&transactionType=TOP_UP
    * 
-   * // Success Response (200):
+   * Success Response (200):
    * {
    *   "message": "Inventory history retrieved successfully",
-   *   "transactions": [
-   *     {
-   *       "id": "123e4567-e89b-12d3-a456-426614174000",
-   *       "type": "TOP_UP",
-   *       "quantity": 50,
-   *       "reason": "Stock delivery",
-   *       "createdAt": "2024-01-15T10:30:00Z",
-   *       "userId": "user-uuid"
-   *     }
-   *   ],
+   *   "transactions": [...],
    *   "pagination": {
    *     "page": 1,
    *     "limit": 20,
@@ -291,72 +190,42 @@ class InventoryController {
    *   }
    * }
    */
-  static async getProductInventoryHistory(req, res) {
-    try {
-      const { productId } = req.params; // Get from URL params instead of query
-      const userId = req.user.userId; // Get from authenticated user
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const { transactionType, startDate, endDate } = req.query;
+  static getProductInventoryHistory = asyncHandler(async (req, res) => {
+    const { productId } = req.params;
+    const userId = req.user?.userId;
+    const { transactionType, startDate, endDate } = req.query;
 
-      // Validate required parameters
-      if (!productId) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Product ID is required",
-        });
-      }
+    // Validate UUID format
+    RequestValidator.validateUUID(productId, "Product ID");
 
-      // Validate UUID format
-      if (!InventoryController.isValidUUID(productId)) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Invalid product ID format. Expected UUID format.",
-        });
-      }
+    // Validate pagination parameters
+    const { page, limit } = RequestValidator.validatePagination(req.query);
 
-      // Validate pagination parameters
-      if (page < 1) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Page number must be greater than 0",
-        });
-      }
-
-      if (limit < 1 || limit > 100) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Limit must be between 1 and 100",
-        });
-      }
-
-      // Validate transaction type if provided
-      if (transactionType && !['TOP_UP', 'USAGE'].includes(transactionType)) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Transaction type must be either 'TOP_UP' or 'USAGE'",
-        });
-      }
-
-      const history = await InventoryService.getProductInventoryHistory(productId, {
-        page,
-        limit,
-        userId,
-        transactionType,
-        startDate,
-        endDate,
-      });
-
-      res.status(200).json(
-        history);
-    } catch (err) {
-      console.error("Error getting inventory history:", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error getting inventory history",
+    // Validate transaction type if provided
+    if (transactionType && !['TOP_UP', 'USAGE'].includes(transactionType)) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Transaction type must be either 'TOP_UP' or 'USAGE'",
       });
     }
-  }
+
+    // Delegate to service layer
+    const history = await InventoryService.getProductInventoryHistory(productId, {
+      page,
+      limit,
+      userId,
+      transactionType,
+      startDate,
+      endDate,
+    });
+
+    return SuccessResponse.okWithPagination(
+      res,
+      history.transactions,
+      history.pagination,
+      "Inventory history retrieved successfully"
+    );
+  });
 
   /**
    * Get Business Inventory History
@@ -384,114 +253,54 @@ class InventoryController {
    * @returns {Promise<void>} JSON response with business-wide transaction history
    * 
    * @example
-   * // GET /api/inventory/business/history?page=1&limit=50&categoryId=cat-uuid&transactionType=USAGE
+   * GET /api/inventory/business/history?page=1&limit=50&categoryId=cat-uuid&transactionType=USAGE
    * 
-   * // Success Response (200):
+   * Success Response (200):
    * {
    *   "message": "Business inventory history retrieved successfully",
-   *   "transactions": [
-   *     {
-   *       "id": "trans-uuid",
-   *       "productId": "prod-uuid",
-   *       "productName": "Widget A",
-   *       "categoryId": "cat-uuid",
-   *       "categoryName": "Electronics",
-   *       "type": "USAGE",
-   *       "quantity": 5,
-   *       "reason": "Customer order",
-   *       "createdAt": "2024-01-15T14:20:00Z"
-   *     }
-   *   ],
-   *   "pagination": {
-   *     "page": 1,
-   *     "limit": 50,
-   *     "total": 234,
-   *     "totalPages": 5
-   *   },
-   *   "summary": {
-   *     "totalTopUps": 120,
-   *     "totalUsage": 114,
-   *     "categories": [
-   *       {
-   *         "categoryId": "cat-uuid",
-   *         "categoryName": "Electronics",
-   *         "transactionCount": 45
-   *       }
-   *     ]
-   *   }
+   *   "transactions": [...],
+   *   "pagination": {...},
+   *   "summary": {...}
    * }
-   * 
-   * @throws {400} Bad Request - Invalid parameters or unauthorized access
-   * @throws {500} Internal Server Error - Database or service errors
    */
-  static async getBusinessInventoryHistory(req, res) {
-    try {
-      const userId = req.user.userId;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const { transactionType, startDate, endDate, categoryId } = req.query;
+  static getBusinessInventoryHistory = asyncHandler(async (req, res) => {
+    const userId = req.user?.userId;
+    const { transactionType, startDate, endDate, categoryId } = req.query;
 
-      // Validate pagination parameters
-      if (page < 1) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Page number must be greater than 0",
-        });
-      }
+    // Validate pagination parameters
+    const { page, limit } = RequestValidator.validatePagination(req.query);
 
-      if (limit < 1 || limit > 100) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Limit must be between 1 and 100",
-        });
-      }
-
-      // Validate transaction type if provided
-      if (transactionType && !['TOP_UP', 'USAGE'].includes(transactionType)) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Transaction type must be either 'TOP_UP' or 'USAGE'",
-        });
-      }
-
-      // Validate category ID format if provided
-      if (categoryId && !InventoryController.isValidUUID(categoryId)) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: "Invalid category ID format. Expected UUID format.",
-        });
-      }
-
-      const history = await InventoryService.getBusinessInventoryHistory({
-        userId,
-        page,
-        limit,
-        transactionType,
-        startDate,
-        endDate,
-        categoryId,
-      });
-
-      res.status(200).json(history);
-    } catch (err) {
-      if (
-        err.message.includes("not found") ||
-        err.message.includes("not authorized") ||
-        err.message.includes("required")
-      ) {
-        return res.status(400).json({
-          error: "Bad Request",
-          message: err.message,
-        });
-      }
-
-      console.error("Error getting business inventory history:", err);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: "Error getting business inventory history",
+    // Validate transaction type if provided
+    if (transactionType && !['TOP_UP', 'USAGE'].includes(transactionType)) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Transaction type must be either 'TOP_UP' or 'USAGE'",
       });
     }
-  }
+
+    // Validate category ID format if provided
+    if (categoryId) {
+      RequestValidator.validateUUID(categoryId, "Category ID");
+    }
+
+    // Delegate to service layer
+    const history = await InventoryService.getBusinessInventoryHistory({
+      userId,
+      page,
+      limit,
+      transactionType,
+      startDate,
+      endDate,
+      categoryId,
+    });
+
+    return SuccessResponse.okWithPagination(
+      res,
+      history.transactions,
+      history.pagination,
+      "Business inventory history retrieved successfully"
+    );
+  });
 }
 
 /**
