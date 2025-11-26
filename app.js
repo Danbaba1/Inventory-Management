@@ -7,6 +7,7 @@ import { ProductRoutes } from "./src/routes/product.route.js";
 import { CategoryRoutes } from "./src/routes/category.route.js";
 import { InventoryRoutes } from "./src/routes/inventory.route.js";
 import { BusinessRoutes } from "./src/routes/business.route.js";
+import { ProductionRoutes } from "./src/routes/production.route.js";
 import errorHandler from "./src/middleware/errorHandler.js";
 
 import dotenv from "dotenv";
@@ -55,6 +56,7 @@ app.use("/api/products", ProductRoutes);
 app.use("/api/categories", CategoryRoutes);
 app.use("/api/inventory", InventoryRoutes);
 app.use("/api/businesses", BusinessRoutes);
+app.use("/api/production-lines", ProductionRoutes);
 
 app.use(errorHandler);
 
