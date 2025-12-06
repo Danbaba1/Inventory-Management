@@ -16,7 +16,8 @@ class ProductService {
     quantity,
     price,
     description,
-    userId
+    userId,
+    businessId
   ) {
     // Validate inputs
     if (!name || !name.trim()) {
@@ -39,10 +40,15 @@ class ProductService {
       throw ErrorResponse.unauthorized("User authentication required");
     }
 
+    if (!businessId) {
+      throw ErrorResponse.badRequest("Business ID is required");
+    }
+
     // Verify user has active business
     const { data: userBusiness, error: businessError } = await supabase
       .from("businesses")
       .select("id")
+      .eq("id", businessId)
       .eq("owner_id", userId)
       .eq("is_active", true)
       .single();
@@ -127,7 +133,7 @@ class ProductService {
   /**
    * Retrieve paginated products with filtering
    */
-  static async getProducts(page = 1, limit = 10, userId, filters = {}) {
+  static async getProducts(page = 1, limit = 10, userId, businessId, filters = {}) {
     if (!userId) {
       throw ErrorResponse.unauthorized("User authentication required");
     }
@@ -136,6 +142,7 @@ class ProductService {
     const { data: userBusiness, error: businessError } = await supabase
       .from("businesses")
       .select("id")
+      .eq("id", businessId)
       .eq("owner_id", userId)
       .eq("is_active", true)
       .single();
@@ -205,7 +212,7 @@ class ProductService {
 
     return {
       message,
-      products: products || [],
+      data: products || [],
       pagination: {
         currentPage: page,
         totalPages,
@@ -272,7 +279,7 @@ class ProductService {
   /**
    * Update existing product
    */
-  static async updateProduct(id, updateData, userId) {
+  static async updateProduct(id, updateData, userId, businessId) {
     if (!id || !userId) {
       throw ErrorResponse.badRequest(
         "Product ID and user authentication required"
@@ -283,6 +290,7 @@ class ProductService {
     const { data: userBusiness, error: businessError } = await supabase
       .from("businesses")
       .select("id")
+      .eq("id", businessId)
       .eq("owner_id", userId)
       .eq("is_active", true)
       .single();
@@ -436,7 +444,7 @@ class ProductService {
 
     // Check for recent transactions (last 24 hours)
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    
+
     const { data: pendingTransactions, count, error: countError } =
       await supabase
         .from("inventory_transactions")
@@ -468,7 +476,7 @@ class ProductService {
 
       throw ErrorResponse.conflict(
         `Cannot delete product with ${count} recent inventory transaction(s) (${transactionTypes}). ` +
-          `Total quantity affected: ${totalQuantity}. Please try again later.`
+        `Total quantity affected: ${totalQuantity}. Please try again later.`
       );
     }
 

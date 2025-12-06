@@ -104,7 +104,7 @@ class ProductController {
    * }
    */
   static createProduct = asyncHandler(async (req, res) => {
-    const { name, quantity, price, description, categoryId } = req.body;
+    const { name, quantity, price, description, categoryId, businessId } = req.body;
     const userId = req.user?.userId;
 
     // Delegate comprehensive validation and creation logic to service layer
@@ -114,7 +114,8 @@ class ProductController {
       quantity,
       price,
       description,
-      userId
+      userId,
+      businessId
     );
 
     return SuccessResponse.created(res, result, "Product created successfully");
@@ -174,14 +175,14 @@ class ProductController {
    */
   static getProducts = asyncHandler(async (req, res) => {
     const { page, limit } = RequestValidator.validatePagination(req.query);
+    const { businessId } = req.params;
     const userId = req.user?.userId;
 
     // Service handles business verification and data retrieval with joins
-    const result = await ProductService.getProducts(page, limit, userId);
-
+    const result = await ProductService.getProducts(page, limit, userId, businessId);
     return SuccessResponse.okWithPagination(
       res,
-      result.products,
+      result.data,
       result.pagination,
       "Products retrieved successfully"
     );
@@ -246,12 +247,18 @@ class ProductController {
     const { id } = req.params;
     const updateData = req.body;
     const userId = req.user?.userId;
+    const { businessId } = req.body;
 
     // Validate UUID format
     RequestValidator.validateUUID(id, "Product ID");
 
+    // Validate businessId if provided
+    if (businessId) {
+      RequestValidator.validateUUID(businessId, "Business ID");
+    }
+
     // Service handles validation, authorization, and complex update logic
-    const result = await ProductService.updateProduct(id, updateData, userId);
+    const result = await ProductService.updateProduct(id, updateData, userId, businessId);
 
     return SuccessResponse.ok(res, result, "Product updated successfully");
   });

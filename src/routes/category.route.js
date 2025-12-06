@@ -85,13 +85,21 @@ router.post("/", authenticateUser, CategoryController.createCategory);
 
 /**
  * @swagger
- * /api/categories:
+ * /api/categories/{businessId}:
  *   get:
- *     summary: Get all categories for user's business
+ *     summary: Get all categories for a specific business
  *     tags: [Categories]
  *     security:
  *       - bearerAuth: []
  *     parameters:
+ *       - in: path
+ *         name: businessId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Business ID to retrieve categories from
+ *         example: "92783133-ec84-4811-b351-863b67b70720"
  *       - in: query
  *         name: page
  *         schema:
@@ -103,7 +111,7 @@ router.post("/", authenticateUser, CategoryController.createCategory);
  *         schema:
  *           type: integer
  *           default: 10
- *         description: Number of categories per page
+ *         description: Number of categories per page (max 100)
  *     responses:
  *       200:
  *         description: Categories retrieved successfully
@@ -112,10 +120,13 @@ router.post("/", authenticateUser, CategoryController.createCategory);
  *             schema:
  *               type: object
  *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
  *                 message:
  *                   type: string
  *                   example: "Categories retrieved successfully"
- *                 categories:
+ *                 data:
  *                   type: array
  *                   items:
  *                     type: object
@@ -135,6 +146,9 @@ router.post("/", authenticateUser, CategoryController.createCategory);
  *                       created_at:
  *                         type: string
  *                         format: date-time
+ *                       updated_at:
+ *                         type: string
+ *                         format: date-time
  *                       business:
  *                         type: object
  *                         properties:
@@ -149,6 +163,7 @@ router.post("/", authenticateUser, CategoryController.createCategory);
  *                           properties:
  *                             id:
  *                               type: string
+ *                               format: uuid
  *                             name:
  *                               type: string
  *                             description:
@@ -164,20 +179,35 @@ router.post("/", authenticateUser, CategoryController.createCategory);
  *                   properties:
  *                     currentPage:
  *                       type: integer
+ *                       example: 1
  *                     totalPages:
  *                       type: integer
- *                     totalCategories:
+ *                       example: 3
+ *                     pageSize:
  *                       type: integer
- *                     hasNext:
+ *                       example: 10
+ *                     totalItems:
+ *                       type: integer
+ *                       example: 25
+ *                     hasNextPage:
  *                       type: boolean
- *                     hasPrev:
+ *                       example: true
+ *                     hasPrevPage:
  *                       type: boolean
+ *                       example: false
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: Bad request - Invalid business ID format or user has no access
  *       401:
  *         description: Unauthorized - Invalid or missing token
  *       403:
- *         description: User must register a business to view categories
+ *         description: Forbidden - Business not found or not owned by user
+ *       500:
+ *         description: Internal server error
  */
-router.get("/", authenticateUser, CategoryController.getCategories);
+router.get("/:businessId", authenticateUser, CategoryController.getCategories);
 
 /**
  * @swagger

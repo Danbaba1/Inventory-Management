@@ -95,7 +95,7 @@ class CategoryController {
    * - 500: Server error during creation
    */
   static createCategory = asyncHandler(async (req, res) => {
-    const { name, description } = req.body;
+    const { name, description, businessId } = req.body;
     const userId = req.user?.userId;
 
     // Delegate business logic to service layer
@@ -103,6 +103,7 @@ class CategoryController {
     const result = await CategoryService.createCategory(
       name,
       description,
+      businessId,
       userId
     );
 
@@ -178,16 +179,17 @@ class CategoryController {
   static getCategories = asyncHandler(async (req, res) => {
     // Validate pagination parameters
     const { page, limit } = RequestValidator.validatePagination(req.query);
+    const { businessId } = req.params;
     const userId = req.user?.userId;
 
     // Service handles business ownership verification and data retrieval
-    const result = await CategoryService.getCategories(page, limit, userId);
+    const result = await CategoryService.getCategories(userId, businessId, { page, limit });
 
     return SuccessResponse.okWithPagination(
       res,
-      result.categories,
+      result.data,
       result.pagination,
-      result.message
+      "Categories retrieved successfully"
     );
   });
 

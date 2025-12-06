@@ -140,7 +140,7 @@ const inventoryRouter = express.Router();
  *         description: Server error
  */
 inventoryRouter.get(
-  "/business/history",
+  "/business/:businessId/history",
   authenticateUser,
   InventoryController.getBusinessInventoryHistory
 );

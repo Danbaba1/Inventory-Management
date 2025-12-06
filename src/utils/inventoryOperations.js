@@ -73,25 +73,23 @@ export async function incrementProductQuantity(
     }
 
     const oldQuantity = product.quantity;
-    const newQuantity = oldQuantity + Number(quantity);
 
-    // Use stored procedure for atomic operation
+    // Use stored procedure with the correct parameters
     const { data: transactionData, error: transactionError } =
         await supabase.rpc("increment_product_quantity", {
             p_product_id: productId,
-            p_business_id: product.business.id,
-            p_user_id: userId,
-            p_old_quantity: oldQuantity,
-            p_new_quantity: newQuantity,
-            p_quantity_changed: Number(quantity),
+            p_quantity: Number(quantity),
             p_reason: reason || "Stock replenishment",
             p_reference_id: referenceId,
+            p_user_id: userId,
         });
 
     if (transactionError) {
         console.error("Stored procedure error:", transactionError);
         throw ErrorResponse.internal("Failed to increment product quantity");
     }
+
+    const newQuantity = oldQuantity + Number(quantity);
 
     return {
         message: "Quantity added successfully",
@@ -180,25 +178,23 @@ export async function decrementProductQuantity(
     }
 
     const oldQuantity = product.quantity;
-    const newQuantity = oldQuantity - Number(quantity);
 
-    // Use stored procedure for atomic operation
+    // Use stored procedure with the correct parameters
     const { data: transactionData, error: transactionError } =
         await supabase.rpc("decrement_product_quantity", {
             p_product_id: productId,
-            p_business_id: product.business.id,
-            p_user_id: userId,
-            p_old_quantity: oldQuantity,
-            p_new_quantity: newQuantity,
-            p_quantity_changed: Number(quantity),
+            p_quantity: Number(quantity),
             p_reason: reason || "Stock usage",
             p_reference_id: referenceId,
+            p_user_id: userId,
         });
 
     if (transactionError) {
         console.error("Stored procedure error:", transactionError);
         throw ErrorResponse.internal("Failed to decrement product quantity");
     }
+
+    const newQuantity = oldQuantity - Number(quantity);
 
     return {
         message: "Quantity removed successfully",

@@ -1,6 +1,6 @@
 // src/services/production.service.js
 
-import { supabase } from "../config/supabase";
+import { supabase } from "../config/supabase.js";
 
 class ProductionService {
     // ============================================
@@ -925,4 +925,4 @@ class ProductionService {
     }
 }
 
-module.exports = new ProductionService();
+export default ProductionService;

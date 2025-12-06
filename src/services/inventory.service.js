@@ -24,7 +24,7 @@ class InventoryService {
     reason = null,
     referenceId = null
   ) {
-    return await incrementProductQuantity(
+    return incrementProductQuantity(
       productId,
       quantity,
       userId,
@@ -44,7 +44,7 @@ class InventoryService {
     reason = null,
     referenceId = null
   ) {
-    return await decrementProductQuantity(
+    return decrementProductQuantity(
       productId,
       quantity,
       userId,
@@ -73,6 +73,8 @@ class InventoryService {
 
     const offset = (page - 1) * limit;
 
+    console.log(`Fetching product: ${productId}`);
+
     // Check if the product's category is active
     const { data: productCheck, error: productError } = await supabase
       .from("products")
@@ -90,7 +92,12 @@ class InventoryService {
     }
 
     if (productError) {
-      console.error("Product check error:", productError);
+      console.error("Product check error:", {
+        message: productError.message,
+        details: productError.details,
+        hint: productError.hint,
+        code: productError.code,
+      });
       throw ErrorResponse.internal("Failed to verify product");
     }
 
@@ -108,6 +115,8 @@ class InventoryService {
         },
       };
     }
+
+    console.log(`Fetching transactions for product: ${productId}`);
 
     let query = supabase
       .from("inventory_transactions")
@@ -158,7 +167,12 @@ class InventoryService {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Transaction history fetch error:", error);
+      console.error("Transaction history fetch error:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
       throw ErrorResponse.internal("Failed to retrieve inventory history");
     }
 
@@ -203,6 +217,7 @@ class InventoryService {
       startDate,
       endDate,
       categoryId,
+      businessId,
     } = options;
 
     if (!userId) {
@@ -213,6 +228,7 @@ class InventoryService {
     const { data: userBusiness, error: businessError } = await supabase
       .from("businesses")
       .select("id, name, type")
+      .eq("id", businessId)
       .eq("owner_id", userId)
       .eq("is_active", true)
       .single();
@@ -430,7 +446,7 @@ class InventoryService {
       message,
       business: userBusiness,
       categories,
-      totalTransactions: activeTransactions.length || 0,
+      transactions: activeTransactions.length || 0,
       pagination: {
         currentPage: page,
         totalPages: Math.ceil((activeTransactions.length || 0) / limit),

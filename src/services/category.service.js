@@ -11,20 +11,25 @@ class CategoryService {
   /**
    * Create new category with validation and error handling
    */
-  static async createCategory(name, description, userId) {
+  static async createCategory(name, description, businessId, userId) {
     // Validate inputs
     if (!name || typeof name !== 'string' || !name.trim()) {
       throw ErrorResponse.badRequest('Category name is required');
     }
-    
+
     if (!userId) {
       throw ErrorResponse.unauthorized('User authentication required');
+    }
+
+    if (!businessId) {
+      throw ErrorResponse.badRequest('Business ID is required to create category');
     }
 
     // Verify user has active business
     const { data: userBusiness, error: businessError } = await supabase
       .from("businesses")
       .select("id, name")
+      .eq("id", businessId)
       .eq("owner_id", userId)
       .eq("is_active", true)
       .single();
@@ -84,7 +89,7 @@ class CategoryService {
   /**
    * Get categories with pagination and proper error handling
    */
-  static async getCategories(userId, filters = {}) {
+  static async getCategories(userId, businessId, filters = {}) {
     if (!userId) {
       throw ErrorResponse.unauthorized('User authentication required');
     }
@@ -93,6 +98,7 @@ class CategoryService {
     const { data: userBusiness, error: businessError } = await supabase
       .from("businesses")
       .select("id")
+      .eq("id", businessId)
       .eq("owner_id", userId)
       .eq("is_active", true)
       .single();
@@ -160,7 +166,7 @@ class CategoryService {
     if (!id || typeof id !== 'string') {
       throw ErrorResponse.badRequest('Valid Category ID is required');
     }
-    
+
     if (!userId) {
       throw ErrorResponse.unauthorized('User authentication required');
     }
@@ -254,7 +260,7 @@ class CategoryService {
     if (!id || typeof id !== 'string') {
       throw ErrorResponse.badRequest('Valid Category ID is required');
     }
-    
+
     if (!userId) {
       throw ErrorResponse.unauthorized('User authentication required');
     }
@@ -309,7 +315,7 @@ class CategoryService {
 
     if (count > 0) {
       const totalValue = productsInCategory.reduce(
-        (sum, p) => sum + (p.price * p.quantity), 
+        (sum, p) => sum + (p.price * p.quantity),
         0
       );
 

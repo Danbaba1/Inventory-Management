@@ -266,6 +266,7 @@ class InventoryController {
   static getBusinessInventoryHistory = asyncHandler(async (req, res) => {
     const userId = req.user?.userId;
     const { transactionType, startDate, endDate, categoryId } = req.query;
+    const { businessId } = req.params;
 
     // Validate pagination parameters
     const { page, limit } = RequestValidator.validatePagination(req.query);
@@ -283,6 +284,10 @@ class InventoryController {
       RequestValidator.validateUUID(categoryId, "Category ID");
     }
 
+    if (businessId) {
+      RequestValidator.validateUUID(businessId, "Business ID");
+    }
+
     // Delegate to service layer
     const history = await InventoryService.getBusinessInventoryHistory({
       userId,
@@ -292,6 +297,7 @@ class InventoryController {
       startDate,
       endDate,
       categoryId,
+      businessId
     });
 
     return SuccessResponse.okWithPagination(

@@ -107,7 +107,7 @@ productRouter.post("/", authenticateUser, ProductController.createProduct);
  *       500:
  *         description: Server error
  */
-productRouter.get("/", authenticateUser, ProductController.getProducts);
+productRouter.get("/:businessId", authenticateUser, ProductController.getProducts);
 
 /**
  * @swagger
@@ -155,7 +155,7 @@ productRouter.get("/", authenticateUser, ProductController.getProducts);
  *       500:
  *         description: Server error
  */
-productRouter.patch("/:id", authenticateUser, ProductController.updateProduct);
+productRouter.put("/:id", authenticateUser, ProductController.updateProduct);
 
 /**
  * @swagger

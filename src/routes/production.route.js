@@ -1,9 +1,9 @@
 // src/routes/production.route.js
 
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const productionController = require('../controllers/production.controller');
-const { authenticateUser } = require('../middleware/auth.middleware');
+import ProductionController from '../controllers/production.controller.js';
+import { authenticateUser } from '../middleware/auth.middleware.js';
 
 // ============================================
 // PRODUCTION LINE ROUTES
@@ -35,7 +35,7 @@ const { authenticateUser } = require('../middleware/auth.middleware');
 router.post(
     '/production-lines',
     authenticateUser,
-    productionController.createProductionLine
+    ProductionController.createProductionLine
 );
 
 /**
@@ -47,7 +47,7 @@ router.post(
 router.get(
     '/production-lines',
     authenticateUser,
-    productionController.getProductionLines
+    ProductionController.getProductionLines
 );
 
 /**
@@ -59,7 +59,7 @@ router.get(
 router.get(
     '/production-lines/:id',
     authenticateUser,
-    productionController.getProductionLineById
+    ProductionController.getProductionLineById
 );
 
 /**
@@ -71,7 +71,7 @@ router.get(
 router.put(
     '/production-lines/:id',
     authenticateUser,
-    productionController.updateProductionLine
+    ProductionController.updateProductionLine
 );
 
 /**
@@ -83,7 +83,7 @@ router.put(
 router.put(
     '/production-lines/:id/start',
     authenticateUser,
-    productionController.startProduction
+    ProductionController.startProduction
 );
 
 /**
@@ -95,7 +95,7 @@ router.put(
 router.put(
     '/production-lines/:id/complete',
     authenticateUser,
-    productionController.completeProduction
+    ProductionController.completeProduction
 );
 
 /**
@@ -107,7 +107,7 @@ router.put(
 router.delete(
     '/production-lines/:id',
     authenticateUser,
-    productionController.deleteProductionLine
+    ProductionController.deleteProductionLine
 );
 
 // ============================================
@@ -131,7 +131,7 @@ router.delete(
 router.post(
     '/production-lines/:id/resources',
     authenticateUser,
-    productionController.addResource
+    ProductionController.addResource
 );
 
 /**
@@ -143,7 +143,7 @@ router.post(
 router.get(
     '/production-lines/:id/resources',
     authenticateUser,
-    productionController.getResources
+    ProductionController.getResources
 );
 
 /**
@@ -155,7 +155,7 @@ router.get(
 router.put(
     '/production-resources/:id',
     authenticateUser,
-    productionController.updateResource
+    ProductionController.updateResource
 );
 
 /**
@@ -167,7 +167,7 @@ router.put(
 router.delete(
     '/production-resources/:id',
     authenticateUser,
-    productionController.deleteResource
+    ProductionController.deleteResource
 );
 
 // ============================================
@@ -190,7 +190,7 @@ router.delete(
 router.post(
     '/production-lines/:id/requests',
     authenticateUser,
-    productionController.createRequest
+    ProductionController.createRequest
 );
 
 /**
@@ -202,7 +202,7 @@ router.post(
 router.get(
     '/production-lines/:id/requests',
     authenticateUser,
-    productionController.getRequests
+    ProductionController.getRequests
 );
 
 /**
@@ -214,7 +214,7 @@ router.get(
 router.put(
     '/production-requests/:id/fulfill',
     authenticateUser,
-    productionController.fulfillRequest
+    ProductionController.fulfillRequest
 );
 
 /**
@@ -226,7 +226,7 @@ router.put(
 router.put(
     '/production-requests/:id/cancel',
     authenticateUser,
-    productionController.cancelRequest
+    ProductionController.cancelRequest
 );
 
 /**
@@ -238,7 +238,7 @@ router.put(
 router.delete(
     '/production-requests/:id',
     authenticateUser,
-    productionController.deleteRequest
+    ProductionController.deleteRequest
 );
 
 // ============================================
@@ -254,7 +254,7 @@ router.delete(
 router.get(
     '/production/analytics/summary',
     authenticateUser,
-    productionController.getProductionSummary
+    ProductionController.getProductionSummary
 );
 
 /**
@@ -266,7 +266,7 @@ router.get(
 router.get(
     '/production/analytics/efficiency',
     authenticateUser,
-    productionController.getProductionEfficiency
+    ProductionController.getProductionEfficiency
 );
 
 /**
@@ -278,7 +278,7 @@ router.get(
 router.get(
     '/production/:id/variance',
     authenticateUser,
-    productionController.getResourceVariance
+    ProductionController.getResourceVariance
 );
 
-module.exports = router;
+export { router as ProductionRoutes };

@@ -1,6 +1,6 @@
 // src/controllers/production.controller.js
 
-const productionService = require('../services/production.service');
+import ProductionService from '../services/production.service.js';
 
 class ProductionController {
     // ============================================
@@ -11,7 +11,7 @@ class ProductionController {
      * Create new production line with resources
      * POST /api/production-lines
      */
-    async createProductionLine(req, res) {
+    static async createProductionLine(req, res) {
         try {
             const {
                 itemId,
@@ -51,7 +51,7 @@ class ProductionController {
                 }
             }
 
-            const productionLine = await productionService.createProductionLine(
+            const productionLine = await ProductionService.createProductionLine(
                 req.body,
                 req.user.id
             );
@@ -74,7 +74,7 @@ class ProductionController {
      * Get all production lines for a business
      * GET /api/production-lines?businessId=xxx&status=xxx&page=1&limit=10
      */
-    async getProductionLines(req, res) {
+    static async getProductionLines(req, res) {
         try {
             const { businessId, status, page, limit, sortBy, sortOrder } = req.query;
 
@@ -85,7 +85,7 @@ class ProductionController {
                 });
             }
 
-            const result = await productionService.getAllProductionLines(businessId, {
+            const result = await ProductionService.getAllProductionLines(businessId, {
                 status,
                 page: page || 1,
                 limit: limit || 10,
@@ -111,7 +111,7 @@ class ProductionController {
      * Get single production line by ID
      * GET /api/production-lines/:id?businessId=xxx
      */
-    async getProductionLineById(req, res) {
+    static async getProductionLineById(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.query;
@@ -123,7 +123,7 @@ class ProductionController {
                 });
             }
 
-            const productionLine = await productionService.getProductionLineById(
+            const productionLine = await ProductionService.getProductionLineById(
                 id,
                 businessId
             );
@@ -146,7 +146,7 @@ class ProductionController {
      * Update production line
      * PUT /api/production-lines/:id
      */
-    async updateProductionLine(req, res) {
+    static async updateProductionLine(req, res) {
         try {
             const { id } = req.params;
             const { businessId, ...updates } = req.body;
@@ -163,7 +163,7 @@ class ProductionController {
             delete updates.created_at;
             delete updates.updated_at;
 
-            const updatedProduction = await productionService.updateProductionLine(
+            const updatedProduction = await ProductionService.updateProductionLine(
                 id,
                 businessId,
                 updates
@@ -187,7 +187,7 @@ class ProductionController {
      * Start production (change status to IN_PROGRESS)
      * PUT /api/production-lines/:id/start
      */
-    async startProduction(req, res) {
+    static async startProduction(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.body;
@@ -199,7 +199,7 @@ class ProductionController {
                 });
             }
 
-            const production = await productionService.startProductionLine(
+            const production = await ProductionService.startProductionLine(
                 id,
                 businessId
             );
@@ -222,7 +222,7 @@ class ProductionController {
      * Complete production line
      * PUT /api/production-lines/:id/complete
      */
-    async completeProduction(req, res) {
+    static async completeProduction(req, res) {
         try {
             const { id } = req.params;
             const { businessId, finalItemsProduced } = req.body;
@@ -241,7 +241,7 @@ class ProductionController {
                 });
             }
 
-            const result = await productionService.completeProductionLine(
+            const result = await ProductionService.completeProductionLine(
                 id,
                 businessId,
                 finalItemsProduced,
@@ -266,7 +266,7 @@ class ProductionController {
      * Delete production line
      * DELETE /api/production-lines/:id
      */
-    async deleteProductionLine(req, res) {
+    static async deleteProductionLine(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.query;
@@ -278,7 +278,7 @@ class ProductionController {
                 });
             }
 
-            const result = await productionService.deleteProductionLine(
+            const result = await ProductionService.deleteProductionLine(
                 id,
                 businessId
             );
@@ -301,7 +301,7 @@ class ProductionController {
      * Add resource to production line
      * POST /api/production-lines/:id/resources
      */
-    async addResource(req, res) {
+    static async addResource(req, res) {
         try {
             const { id } = req.params;
             const { businessId, ...resourceData } = req.body;
@@ -322,7 +322,7 @@ class ProductionController {
                 });
             }
 
-            const resource = await productionService.addResourceToProduction(
+            const resource = await ProductionService.addResourceToProduction(
                 id,
                 businessId,
                 resourceData
@@ -346,7 +346,7 @@ class ProductionController {
      * Get resources for a production line
      * GET /api/production-lines/:id/resources?businessId=xxx
      */
-    async getResources(req, res) {
+    static async getResources(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.query;
@@ -358,7 +358,7 @@ class ProductionController {
                 });
             }
 
-            const resources = await productionService.getResourcesByProduction(
+            const resources = await ProductionService.getResourcesByProduction(
                 id,
                 businessId
             );
@@ -380,7 +380,7 @@ class ProductionController {
      * Update resource
      * PUT /api/production-resources/:id
      */
-    async updateResource(req, res) {
+    static async updateResource(req, res) {
         try {
             const { id } = req.params;
             const { businessId, ...updates } = req.body;
@@ -399,7 +399,7 @@ class ProductionController {
             delete updates.created_at;
             delete updates.updated_at;
 
-            const resource = await productionService.updateResource(
+            const resource = await ProductionService.updateResource(
                 id,
                 businessId,
                 updates
@@ -423,7 +423,7 @@ class ProductionController {
      * Delete resource
      * DELETE /api/production-resources/:id
      */
-    async deleteResource(req, res) {
+    static async deleteResource(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.query;
@@ -435,7 +435,7 @@ class ProductionController {
                 });
             }
 
-            const result = await productionService.deleteResource(id, businessId);
+            const result = await ProductionService.deleteResource(id, businessId);
 
             res.status(200).json(result);
         } catch (error) {
@@ -455,7 +455,7 @@ class ProductionController {
      * Create production request
      * POST /api/production-lines/:id/requests
      */
-    async createRequest(req, res) {
+    static async createRequest(req, res) {
         try {
             const { id } = req.params;
             const { businessId, ...requestData } = req.body;
@@ -476,7 +476,7 @@ class ProductionController {
                 });
             }
 
-            const request = await productionService.createProductionRequest(
+            const request = await ProductionService.createProductionRequest(
                 id,
                 businessId,
                 requestData,
@@ -501,7 +501,7 @@ class ProductionController {
      * Get requests for a production line
      * GET /api/production-lines/:id/requests?businessId=xxx&status=xxx
      */
-    async getRequests(req, res) {
+    static async getRequests(req, res) {
         try {
             const { id } = req.params;
             const { businessId, status, resourceUsedId } = req.query;
@@ -513,7 +513,7 @@ class ProductionController {
                 });
             }
 
-            const requests = await productionService.getRequestsByProduction(
+            const requests = await ProductionService.getRequestsByProduction(
                 id,
                 businessId,
                 { status, resourceUsedId }
@@ -536,7 +536,7 @@ class ProductionController {
      * Fulfill production request
      * PUT /api/production-requests/:id/fulfill
      */
-    async fulfillRequest(req, res) {
+    static async fulfillRequest(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.body;
@@ -548,7 +548,7 @@ class ProductionController {
                 });
             }
 
-            const result = await productionService.fulfillProductionRequest(
+            const result = await ProductionService.fulfillProductionRequest(
                 id,
                 businessId,
                 req.user.id
@@ -572,7 +572,7 @@ class ProductionController {
      * Cancel production request
      * PUT /api/production-requests/:id/cancel
      */
-    async cancelRequest(req, res) {
+    static async cancelRequest(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.body;
@@ -584,7 +584,7 @@ class ProductionController {
                 });
             }
 
-            const request = await productionService.cancelProductionRequest(
+            const request = await ProductionService.cancelProductionRequest(
                 id,
                 businessId
             );
@@ -607,7 +607,7 @@ class ProductionController {
      * Delete production request
      * DELETE /api/production-requests/:id
      */
-    async deleteRequest(req, res) {
+    static async deleteRequest(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.query;
@@ -619,7 +619,7 @@ class ProductionController {
                 });
             }
 
-            const result = await productionService.deleteProductionRequest(
+            const result = await ProductionService.deleteProductionRequest(
                 id,
                 businessId
             );
@@ -642,7 +642,7 @@ class ProductionController {
      * Get production summary
      * GET /api/production/analytics/summary?businessId=xxx&startDate=xxx&endDate=xxx
      */
-    async getProductionSummary(req, res) {
+    static async getProductionSummary(req, res) {
         try {
             const { businessId, startDate, endDate } = req.query;
 
@@ -653,7 +653,7 @@ class ProductionController {
                 });
             }
 
-            const summary = await productionService.getProductionSummary(businessId, {
+            const summary = await ProductionService.getProductionSummary(businessId, {
                 startDate,
                 endDate
             });
@@ -675,7 +675,7 @@ class ProductionController {
      * Get production efficiency metrics
      * GET /api/production/analytics/efficiency?businessId=xxx
      */
-    async getProductionEfficiency(req, res) {
+    static async getProductionEfficiency(req, res) {
         try {
             const { businessId } = req.query;
 
@@ -686,7 +686,7 @@ class ProductionController {
                 });
             }
 
-            const efficiency = await productionService.getProductionEfficiency(businessId);
+            const efficiency = await ProductionService.getProductionEfficiency(businessId);
 
             res.status(200).json({
                 success: true,
@@ -705,7 +705,7 @@ class ProductionController {
      * Get resource variance report
      * GET /api/production/:id/variance?businessId=xxx
      */
-    async getResourceVariance(req, res) {
+    static async getResourceVariance(req, res) {
         try {
             const { id } = req.params;
             const { businessId } = req.query;
@@ -717,7 +717,7 @@ class ProductionController {
                 });
             }
 
-            const report = await productionService.getResourceVarianceReport(
+            const report = await ProductionService.getResourceVarianceReport(
                 id,
                 businessId
             );
@@ -736,4 +736,4 @@ class ProductionController {
     }
 }
 
-module.exports = new ProductionController();
+export default ProductionController;
